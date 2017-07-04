@@ -394,8 +394,12 @@ function wavlet_transform_Callback(hObject, eventdata, handles)
     handles.WT = cell(n, 1);
     
 %Taking only selected part of the signal    
+    xl = get(handles.xlim,'String');
+    xl = csv_to_mvar(xl);
+    xl = xl.*fs;
+    xl(2) = min(xl(2),size(handles.sig,2));
+    xl(1) = max(xl(1),1);
     handles.sig_cut = handles.sig(:,xl(1):xl(2));
-    
     set(handles.status,'String','Calculating Wavelet Transform...');
     
     handles.amp_WT = cell(n,1);
@@ -462,58 +466,18 @@ function filter_signal_Callback(hObject, eventdata, handles)
         end
     end
     guidata(hObject,handles);
-    
-function plot_bands_Callback(hObject, eventdata, handles)
-%Plotting the selected band
-    signal_selected = get(handles.signal_list,'Value');
-    interval_selected = get(handles.interval_list,'Value');
-    fs = str2double(get(handles.sampling_freq,'String'));
-    xl = csv_to_mvar(get(handles.xlim,'String'));
-    xl = xl.*fs;
-    xl(2) = min(xl(2),size(handles.sig,2));
-    xl(1) = max(xl(1),1);
-    xl = xl./fs;
-    time_axis = xl(1):1/fs:xl(2);
-
-    if isempty(interval_selected) 
-        return;
-    end
-
-    if signal_selected == size(handles.sig,1)+1
-        set(handles.signal_list,'Value',1);
-        drawnow;
-        plot_bands_Callback(hObject, eventdata, handles) %Dangerous recursion?
-        return;
-    end
-
-    child_handles = allchild(handles.wt_pane);
-    for i = 1:size(child_handles,1)
-        if(strcmp(get(child_handles(i),'Type'),'axes'))
-            cla(child_handles(i),'reset');
-            set(child_handles(i),'visible','off');              
-        end
-    end
-    set(handles.amp_axis,'visible','on');
-    set(handles.phase_axis,'visible','on');
-
-    ht = hilbert(handles.bands{signal_selected,interval_selected});
-    re_ht = real(ht);
-    im_ht = imag(ht);
-    plot(handles.amp_axis, time_axis, re_ht);
-    plot(handles.phase_axis, time_axis, im_ht);
-
+       
 function display_type_Callback(hObject, eventdata, handles)
 %Selecting what to display
 display_selected = get(handles.display_type,'Value');
-
 % clear_pane_axes(handles.wt_pane);
-if display_selected == 1 
+if display_selected == 1
 %     handles.plot3d = axes('parent',handles.wt_pane,'position',[.07 .122 .629 .849]);
 %     handles.plot_pow = axes('parent',handles.wt_pane,'position',[.781 .122 .196 .849]);
 %     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);
     wavtr_Callback(hObject, eventdata, handles)
 elseif  display_selected == 2
-    plot_bands_Callback(hObject, eventdata, handles)
+    interval_list_Callback(hObject, eventdata, handles)
 end
 
 function wavtr_Callback(hObject, eventdata, handles)
@@ -677,10 +641,14 @@ function interval_list_Callback(hObject, eventdata, handles)
         set(handles.phase_axis,'visible','on');
 
         ht = hilbert(handles.bands{signal_selected,interval_selected});
-        re_ht = real(ht);
-        im_ht = imag(ht);
-        plot(handles.amp_axis, time_axis, re_ht);
-        plot(handles.phase_axis, time_axis, im_ht);
+        ht = angle(ht);
+        plot(handles.amp_axis, time_axis, handles.bands{signal_selected,interval_selected});
+        plot(handles.phase_axis, time_axis, ht);
+        linkaxes([handles.amp_axis handles.phase_axis],'x');
+        xlabel(handles.phase_axis,'Time (s)');
+        ylabel(handles.phase_axis,'Phase');
+        ylabel(handles.amp_axis,'Filtered Signal');
+        set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi]);
     end
     
     
