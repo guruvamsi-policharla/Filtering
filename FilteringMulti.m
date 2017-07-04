@@ -648,7 +648,8 @@ function interval_list_Callback(hObject, eventdata, handles)
         xlabel(handles.phase_axis,'Time (s)');
         ylabel(handles.phase_axis,'Phase');
         ylabel(handles.amp_axis,'Filtered Signal');
-        set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi]);
+        set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
+        set(handles.amp_axis,'fontunits','normalized');
     end
     
     
