@@ -684,8 +684,7 @@ function interval_list_Callback(hObject, eventdata, handles)
     end
     
     
-function mark_interval_Callback(hObject, eventdata, handles)
-intervals = csv_to_mvar(get(handles.intervals,'String'));    
+function mark_interval_Callback(hObject, eventdata, handles)  
 clear_axes_lines(handles.plot3d);
 child_handles = allchild(handles.plot_pow);
 for i = 1:size(child_handles,1)   
