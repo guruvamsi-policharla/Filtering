@@ -462,9 +462,13 @@ function filter_signal_Callback(hObject, eventdata, handles)
     for i = 1:size(handles.sig,1)
         for j =1:size(list,1)
             fl = csv_to_mvar(list{j,1});
-            handles.bands{i,j} = bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);            
+            [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);%bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);            
         end
     end
+    set(handles.display_type,'Value',2);
+    drawnow;
+    guidata(hObject,handles);
+    display_type_Callback(hObject, eventdata, handles)
     guidata(hObject,handles);
        
 function display_type_Callback(hObject, eventdata, handles)
@@ -472,19 +476,63 @@ function display_type_Callback(hObject, eventdata, handles)
 display_selected = get(handles.display_type,'Value');
 % clear_pane_axes(handles.wt_pane);
 if display_selected == 1
+    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');
 %     handles.plot3d = axes('parent',handles.wt_pane,'position',[.07 .122 .629 .849]);
 %     handles.plot_pow = axes('parent',handles.wt_pane,'position',[.781 .122 .196 .849]);
 %     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);
+    uistack(handles.plot3d,'top');
+    uistack(handles.plot_pow,'top');
     wavtr_Callback(hObject, eventdata, handles)
+    
 elseif  display_selected == 2
     interval_list_Callback(hObject, eventdata, handles)
+    uistack(handles.amp_axis,'top');
+    uistack(handles.phase_axis,'top');
+    
+elseif  display_selected == 3
+    list = get(handles.interval_list,'String');
+    set(handles.interval_list,'max',size(list,1));
+    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');
+    uistack(handles.fourier_plot,'top');
+    
+    child_handles = allchild(handles.wt_pane);
+    fs = str2double(get(handles.sampling_freq,'String'));
+    
+    for i = 1:size(child_handles,1)
+        if(strcmp(get(child_handles(i),'Type'),'axes'))
+            cla(child_handles(i),'reset');
+            set(child_handles(i),'visible','off')                
+        end
+    end    
+    
+    interval_selected = get(handles.interval_list,'Value');
+    signal_selected = get(handles.signal_list,'Value');
+    xl = csv_to_mvar(get(handles.xlim,'String'));
+    xl = xl.*fs;
+    xl(2) = min(xl(2),size(handles.sig,2));
+    xl(1) = max(xl(1),1);
+    hold(handles.fourier_plot,'on');
+    
+    [ft, ft_freq] = Fourier(handles.sig(signal_selected,xl(1):xl(2)),fs);
+    semilogx(handles.fourier_plot,ft_freq,abs(ft));
+    
+    if isfield(handles,'bands')
+        for i = 1:size(interval_selected,2)        
+            [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)}(1,xl(1):xl(2)),fs);
+            semilogx(handles.fourier_plot,ft_freq,abs(ft));
+        end
+    end     
+    
+    xlabel(handles.fourier_plot,'Frequency (Hz)')
+    ylabel(handles.fourier_plot,'FT Power')
+    set(handles.fourier_plot,'fontunits','normalized','visible','on');
 end
 
 function wavtr_Callback(hObject, eventdata, handles)
 %Plots all figures
     signal_selected = get(handles.signal_list,'Value');  
     if any(signal_selected == size(handles.sig,1)+1) && isfield(handles,'freqarr')     
-
+        uistack(handles.cum_avg,'top');
         child_handles = allchild(handles.wt_pane);
         for i = 1:size(child_handles,1)
             if(strcmp(get(child_handles(i),'Type'),'axes'))
@@ -538,7 +586,8 @@ function wavtr_Callback(hObject, eventdata, handles)
                 set(child_handles(i),'visible','off')
             end
         end
-%         set(handles.cum_avg,'visible','off');
+        uistack(handles.plot3d,'top');
+        uistack(handles.plot_pow,'top');
         set(handles.plot3d,'visible','on');
         set(handles.plot_pow,'visible','on');
         
@@ -575,6 +624,8 @@ function wavtr_Callback(hObject, eventdata, handles)
     set(handles.plot3d,'Fontunits','normalized');
     set(handles.plot_pow,'Fontunits','normalized');
     set(handles.cum_avg,'Fontunits','normalized');
+    grid(handles.plot_pow,'on');
+    grid(handles.plot3d,'on');
     guidata(hObject,handles);
 
 %--------------------------------Marking the intervals---------------------
@@ -583,16 +634,10 @@ function interval_list_Callback(hObject, eventdata, handles)
     interval_selected = get(handles.interval_list,'Value');
     display_selected = get(handles.display_type,'Value');
     signal_selected = get(handles.signal_list,'Value');
-    list = get(handles.interval_list,'String');
-    fs = str2double(get(handles.sampling_freq,'String'));
-    fl = csv_to_mvar(cell2mat(list(interval_selected)));
-    xl = csv_to_mvar(get(handles.xlim,'String'));
-    xl = xl.*fs;
-    xl(2) = min(xl(2),size(handles.sig,2));
-    xl(1) = max(xl(1),1);
-    xl = xl./fs;
-    time_axis = xl(1):1/fs:xl(2);
+    list = get(handles.interval_list,'String');    
+    
     if display_selected ==1
+        fl = csv_to_mvar(cell2mat(list(interval_selected)));  
         clear_axes_lines(handles.plot3d);
         child_handles = allchild(handles.plot_pow);
         for i = 1:size(child_handles,1)   
@@ -618,15 +663,21 @@ function interval_list_Callback(hObject, eventdata, handles)
         y = fl(2)*[1 1];
         plot3(handles.plot3d,xl3d,y,z,'--r');            
         plot(handles.plot_pow,xlpow,y,'--r');
-    elseif display_selected == 2
+    
+    elseif display_selected == 2 
         if isempty(interval_selected) 
             return;
         end
-
+        fs = str2double(get(handles.sampling_freq,'String'));
+        xl = csv_to_mvar(get(handles.xlim,'String'));
+        xl = xl.*fs;
+        xl(2) = min(xl(2),size(handles.sig,2));
+        xl(1) = max(xl(1),1);
+        time_axis = xl(1)/fs:1/fs:xl(2)/fs;
         if signal_selected == size(handles.sig,1)+1
             set(handles.signal_list,'Value',1);
             drawnow;
-            plot_bands_Callback(hObject, eventdata, handles) %Dangerous recursion?
+            interval_list_Callback(hObject, eventdata, handles) %Dangerous recursion?
             return;
         end
 
@@ -639,21 +690,32 @@ function interval_list_Callback(hObject, eventdata, handles)
         end
         set(handles.amp_axis,'visible','on');
         set(handles.phase_axis,'visible','on');
-
+        
+        if ~isfield(handles,'bands')
+            return;
+        end
+        
         ht = hilbert(handles.bands{signal_selected,interval_selected});
         ht = angle(ht);
-        plot(handles.amp_axis, time_axis, handles.bands{signal_selected,interval_selected});
-        plot(handles.phase_axis, time_axis, ht);
-        linkaxes([handles.amp_axis handles.phase_axis],'x');
+            
+        plot(handles.amp_axis, time_axis, handles.bands{signal_selected,interval_selected}(1,xl(1):xl(2)));
+        plot(handles.phase_axis, time_axis, ht(1,xl(1):xl(2)));
+        linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
         xlabel(handles.phase_axis,'Time (s)');
         ylabel(handles.phase_axis,'Phase');
         ylabel(handles.amp_axis,'Filtered Signal');
         set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
         set(handles.amp_axis,'fontunits','normalized');
+    elseif display_selected == 3
+        display_type_Callback(hObject, eventdata, handles);
     end
     
     
-function mark_interval_Callback(hObject, eventdata, handles)  
+function mark_interval_Callback(hObject, eventdata, handles) 
+display_selected = get(handles.display_type,'Value');
+if display_selected ~= 1
+    return;
+end
 clear_axes_lines(handles.plot3d);
 child_handles = allchild(handles.plot_pow);
 for i = 1:size(child_handles,1)   
@@ -696,6 +758,10 @@ set(handles.interval_list,'String',list);
 drawnow;
 
 function freq_1_Callback(hObject, eventdata, handles)
+display_selected = get(handles.display_type,'Value');
+if display_selected ~= 1
+    return;
+end
 clear_axes_lines(handles.plot3d);
 child_handles = allchild(handles.plot_pow);
 for i = 1:size(child_handles,1)   
@@ -724,8 +790,11 @@ plot3(handles.plot3d,xl3d,y,z,'--k');
 plot(handles.plot_pow,xlpow,y,'--k');
 
 function freq_2_Callback(hObject, eventdata, handles)
+display_selected = get(handles.display_type,'Value');
+if display_selected ~= 1
+    return;
+end
 clear_axes_lines(handles.plot3d);
-
 child_handles = allchild(handles.plot_pow);
 for i = 1:size(child_handles,1)   
     line_style = get(child_handles(i),'linestyle');
@@ -889,10 +958,10 @@ function xlim_Callback(hObject, eventdata, handles)
     t = xl(2) - xl(1);
     set(handles.length,'String',t);
 
-function ylim_Callback(hObject, eventdata, handles)
-%When the values of ylim are changed the graphs are updated  
-    yl = csv_to_mvar(get(handles.ylim,'String'));
-    ylim(handles.time_series,yl);
+% function ylim_Callback(hObject, eventdata, handles)
+% %When the values of ylim are changed the graphs are updated  
+%     yl = csv_to_mvar(get(handles.ylim,'String'));
+%     ylim(handles.time_series,yl);
 
 %---------------------------Updating Value of limits Limits-----------------------------
 function refresh_limits_Callback(hObject, eventdata, handles)
@@ -906,7 +975,7 @@ function refresh_limits_Callback(hObject, eventdata, handles)
     y = strcat(num2str(y(1)),' , ',num2str(y(2)));
     
     set(handles.xlim,'String',x);
-    set(handles.ylim,'String',y);
+%    set(handles.ylim,'String',y);
     set(handles.length,'String',t);
     
 % ---------------------------Zoom Updating--------------------------
@@ -921,7 +990,7 @@ function zoom_in_OffCallback(hObject, eventdata, handles)
     y = strcat(num2str(y(1)),' , ',num2str(y(2)));
     
     set(handles.xlim,'String',x);
-    set(handles.ylim,'String',y);
+ %   set(handles.ylim,'String',y);
     set(handles.length,'String',t);
 
 % -----------------------------Zoom Updating--------------------------
@@ -936,7 +1005,7 @@ function zoom_out_OffCallback(hObject, eventdata, handles)
     y = strcat(num2str(y(1)),' , ',num2str(y(2)));
     
     set(handles.xlim,'String',x);
-    set(handles.ylim,'String',y);
+%    set(handles.ylim,'String',y);
     set(handles.length,'String',t);
     
 function plot_type_SelectionChangeFcn(hObject, eventdata, handles)
