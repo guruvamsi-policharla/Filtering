@@ -514,18 +514,18 @@ elseif  display_selected == 3
     hold(handles.fourier_plot,'on');
     
     [ft, ft_freq] = Fourier(handles.sig(signal_selected,xl(1):xl(2)),fs);
-    semilogx(handles.fourier_plot,ft_freq,abs(ft));
+    plot(handles.fourier_plot,ft_freq,abs(ft),'linewidth',2);
     
     if isfield(handles,'bands')
         for i = 1:size(interval_selected,2)        
             [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)}(1,xl(1):xl(2)),fs);
-            semilogx(handles.fourier_plot,ft_freq,abs(ft));
+            plot(handles.fourier_plot,ft_freq,abs(ft));
         end
     end     
     
     xlabel(handles.fourier_plot,'Frequency (Hz)')
     ylabel(handles.fourier_plot,'FT Power')
-    set(handles.fourier_plot,'fontunits','normalized','visible','on');
+    set(handles.fourier_plot,'fontunits','normalized','visible','on','xscale','log','yscale','log','xlim',[handles.freqarr(1) handles.freqarr(end)]);
 end
 
 function wavtr_Callback(hObject, eventdata, handles)
