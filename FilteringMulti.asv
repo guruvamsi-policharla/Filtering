@@ -478,11 +478,9 @@ function display_type_Callback(hObject, eventdata, handles)
 %Selecting what to display
 display_selected = get(handles.display_type,'Value');
 fs = str2double(get(handles.sampling_freq,'String'));
-% clear_pane_axes(handles.wt_pane);
+
 if display_selected == 1 
-%     handles.plot3d = axes('parent',handles.wt_pane,'position',[.07 .122 .629 .849]);
-%     handles.plot_pow = axes('parent',handles.wt_pane,'position',[.781 .122 .196 .849]);
-%     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);
+    handles.plot3d = axes('parent',handles.wt_pane,'position',
     wavtr_Callback(hObject, eventdata, handles)
 elseif  display_selected == 2
     plot_bands_Callback(hObject, eventdata, handles)
