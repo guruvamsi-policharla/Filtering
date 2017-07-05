@@ -1,4 +1,4 @@
-%Version 1.01 stable 
+%Version 1.01 stable
 %**************************************************************************
 %*************************** Wavelet Transform ****************************
 %**************************************************************************
@@ -71,7 +71,7 @@
 %            not introduce additional boundary effects to it, then use:
 %            wt(signal(n1:n2),fs,'Padding',{signal(1:n1-1),signal(n2+1:end)});
 %            the same applies if you can predict signal out of the time-limits
-% 'Plot':  {{'off'}} - do not plot anything
+% 'Plot':{{'off'}} - do not plot anything
 %          'amp'   - plots WT amplitude (i.e. its absolute value) together
 %                    with line denoting the cone of influence
 %          'amp+'  - additionally shows time-averaged WT amplitude
@@ -179,16 +179,14 @@
 
 function [WT,freq,varargout] = wt(signal,fs,varargin)
 
-L=length(signal); 
-signal=signal(:);%converts the matrix into a line
+L=length(signal); signal=signal(:);
 p=1; %WT normalization
-
 if length(fs)>1 || ~isnumeric(fs) || isnan(fs) || ~isfinite(fs) || fs<=0
     error('Sampling frequency should be single positive finite numerical value.');
 end
 
 %Default parameters
-Wavelet='Morlet'; f0=1;
+Wavelet='Lognorm'; f0=1;
 fmin=[]; fmax=fs/2;
 nv='auto';
 PadMode='predictive';
@@ -196,8 +194,7 @@ RelTol=0.01;
 Preprocess='on';
 DispMode='on';
 PlotMode='off';
-CutEdges='on';
-
+CutEdges='off';
 %Update if user defined
 vst=1; recflag=1;
 if nargin>2 && isstruct(varargin{1})
@@ -224,7 +221,6 @@ if nargin>2 && isstruct(varargin{1})
     end
     if isfield(copt,'nvsim') && recflag==1, cvv=copt.nvsim; if ~isempty(cvv), nv=cvv; end, end
 end
-
 for vn=vst:2:nargin-2
     if strcmpi(varargin{vn},'Display'), if ~isempty(varargin{vn+1}), DispMode=varargin{vn+1}; end
     elseif strcmpi(varargin{vn},'Wavelet'), if ~isempty(varargin{vn+1}), Wavelet=varargin{vn+1}; end
@@ -271,7 +267,7 @@ elseif strcmpi(Wavelet,'Lognorm')
     wp.C=sqrt(pi/2)/q; wp.D=wp.C*exp(1/(2*q^2));
 elseif strcmpi(Wavelet,'Morlet')
     om0=2*pi*f0; %just for convenience denote circular central frequency
-    fwt=@(xi)(exp(-(1/2)*(om0-xi).^2) -exp(-(1/2)*(om0^2+xi.^2)));
+    fwt=@(xi)(exp(-(1/2)*(om0-xi).^2)-exp(-(1/2)*(om0^2+xi.^2)));
     if f0>=1, twf=@(t)(1/sqrt(2*pi))*(exp(1i*om0*t)-exp(-om0^2/2)).*exp(-t.^2/2); end
     wp.D=Inf;
 elseif strcmpi(Wavelet,'Bump')
@@ -454,7 +450,6 @@ end
 %Wavelet transform by itself
 WT=zeros(SN,L)*NaN; ouflag=0; if (wp.t2e-wp.t1e)*wp.ompeak/(2*pi*fmax)>L/fs, coib1(:)=0; coib2(:)=0; end
 if ~isempty(strfind(lower(DispMode),'on')), pos=0; fprintf('Calculating Wavelet Transform (%d frequencies from %0.3f to %0.3f): ',SN,freq(1),freq(end)); end
-
 for sn=1:SN
     freqwf=ff*wp.ompeak/(2*pi*freq(sn)); %frequencies for the wavelet function
     ii=find(freqwf>wp.xi1/2/pi & freqwf<wp.xi2/2/pi); %take into account only frequencies within the wavelet support
@@ -483,7 +478,6 @@ for sn=1:SN
     if ~isempty(strfind(lower(DispMode),'on')) && floor(100*sn/SN)>floor(100*(sn-1)/SN)
         cstr=num2str(floor(100*sn/SN)); fprintf([repmat('\b',1,pos),cstr,'%%']); pos=length(cstr)+1;
     end
-    
 end
 if ~isempty(strfind(lower(DispMode),'on')), fprintf('\n'); end
 if ouflag==1
@@ -566,7 +560,6 @@ if ~strcmpi(PlotMode,'off')
         end
     end
 end
-
 
 if nargout>2
     wopt=struct; %simulation parameters

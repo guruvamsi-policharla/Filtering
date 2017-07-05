@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 05-Jul-2017 15:54:06
+% Last Modified by GUIDE v2.5 05-Jul-2017 18:17:35
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -460,10 +460,52 @@ function filter_signal_Callback(hObject, eventdata, handles)
 %Extracts the filtered component of the signal
     fs = str2double(get(handles.sampling_freq,'String'));
     list = get(handles.interval_list,'String');    
+    
+    extraction_type = get(handles.extraction_type_popup,'Value');
+    
     for i = 1:size(handles.sig,1)
         for j =1:size(list,1)
             fl = csv_to_mvar(list{j,1});
-            [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);%bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);            
+            if extraction_type == 2
+                [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);%bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);     
+            elseif extraction_type == 1
+%                 if(isnan(fmax)&& isnan(fmin))
+%                     if(isnan(fc))
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);            
+%                     else
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);  
+%                     end
+%                 elseif(isnan(fmax))
+%                     if(isnan(fc))
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
+%                     else
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+%                     end
+%                 elseif(isnan(fmin))
+%                     if(isnan(fc))
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
+%                     else
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+%                     end
+%                 else
+%                     if(isnan(fc))
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
+%                     else
+%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
+%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
+%                     end
+%                 end
+%                 tfsupp = ecurve(WT,handles.freqarr,wopt);
+%                 [handles.bands{i,j},~] = rectfr(tfsupp,wt,freqarr,wopt);
+                
+            end
         end
     end
     set(handles.display_type,'Value',2);
@@ -494,12 +536,14 @@ if display_selected == 1
     
 elseif  display_selected == 2
     set(handles.fourier_scale,'visible','off');
-    interval_selected = get(handles.interval_list,'Value');
-    if size(interval_selected,2)>1
-        set(handles.interval_list,'max',1,'value',1);
-    else
-        set(handles.interval_list,'max',1);
-    end   
+    list = get(handles.interval_list,'String');
+    set(handles.interval_list,'max',size(list,1));
+%     interval_selected = get(handles.interval_list,'Value');
+%     if size(interval_selected,2)>1
+%         set(handles.interval_list,'max',1,'value',1);
+%     else
+%         set(handles.interval_list,'max',1);
+%     end   
     uistack(handles.amp_axis,'top');
     uistack(handles.phase_axis,'top');
     interval_list_Callback(hObject, eventdata, handles)
@@ -682,7 +726,6 @@ function interval_list_Callback(hObject, eventdata, handles)
         if isempty(interval_selected) 
             return;
         end
-%         fs = str2double(get(handles.sampling_freq,'String'));
         xl = csv_to_mvar(get(handles.xlim,'String'));
         
         if signal_selected == size(handles.sig,1)+1
@@ -705,15 +748,17 @@ function interval_list_Callback(hObject, eventdata, handles)
         if ~isfield(handles,'bands')
             return;
         end
-        
-        ht = hilbert(handles.bands{signal_selected,interval_selected});
-        ht = angle(ht);
+        hold(handles.amp_axis,'on');
+        hold(handles.phase_axis,'on');
+        for i = 1:size(interval_selected,2)
+            ht = hilbert(handles.bands{signal_selected,interval_selected(i)});
+            ht = angle(ht);            
+            plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected(i)}(1,:));
+            plot(handles.phase_axis, handles.time_axis, ht(1,:));
+        end        
         linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
-        plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected}(1,:));
-        plot(handles.phase_axis, handles.time_axis, ht(1,:));
         xlim(handles.amp_axis,xl);
-        xlim(handles.phase_axis,xl);
-        
+        xlim(handles.phase_axis,xl);       
         xlabel(handles.phase_axis,'Time (s)');
         ylabel(handles.phase_axis,'Phase');
         ylabel(handles.amp_axis,'Filtered Signal');
@@ -758,6 +803,7 @@ set(handles.freq_2,'String',f);
 plot3(handles.plot3d,xl3d,y,z,'--k');
 plot(handles.plot_pow,xlpow,y,'--k');
 
+xlim(handles.plot_pow,xlpow);
 hold(handles.plot3d,'off');  
 hold(handles.plot_pow,'off');
     
@@ -1156,6 +1202,28 @@ contents = get(handles.fourier_scale,'String');
 scale = contents{get(hObject,'Value')};
 set(handles.fourier_plot,'xscale',scale,'yscale',scale);
 function fourier_scale_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on selection change in extraction_type_popup.
+function extraction_type_popup_Callback(hObject, eventdata, handles)
+% hObject    handle to extraction_type_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns extraction_type_popup contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from extraction_type_popup
+
+
+% --- Executes during object creation, after setting all properties.
+function extraction_type_popup_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to extraction_type_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
