@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 04-Jul-2017 14:30:37
+% Last Modified by GUIDE v2.5 05-Jul-2017 15:54:06
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -341,6 +341,7 @@ function signal_list_Callback(hObject, eventdata, handles)
             display_type_Callback(hObject, eventdata, handles);
         end
         intervals_Callback(hObject, eventdata, handles)
+        interval_list_Callback(hObject, eventdata, handles)
     elseif any(signal_selected == size(handles.sig,1)+1)
         display_type_Callback(hObject, eventdata, handles);
         intervals_Callback(hObject, eventdata, handles)
@@ -476,25 +477,39 @@ function display_type_Callback(hObject, eventdata, handles)
 display_selected = get(handles.display_type,'Value');
 % clear_pane_axes(handles.wt_pane);
 if display_selected == 1
+    set(handles.fourier_scale,'visible','off');
+    interval_selected = get(handles.interval_list,'Value');
+    if size(interval_selected,2)>1
+        set(handles.interval_list,'max',1,'value',1);
+    else
+        set(handles.interval_list,'max',1);
+    end   
+    uistack(handles.plot3d,'top');
+    uistack(handles.plot_pow,'top');
     linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');
 %     handles.plot3d = axes('parent',handles.wt_pane,'position',[.07 .122 .629 .849]);
 %     handles.plot_pow = axes('parent',handles.wt_pane,'position',[.781 .122 .196 .849]);
-%     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);
-    uistack(handles.plot3d,'top');
-    uistack(handles.plot_pow,'top');
+%     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);    
     wavtr_Callback(hObject, eventdata, handles)
     
 elseif  display_selected == 2
-    interval_list_Callback(hObject, eventdata, handles)
+    set(handles.fourier_scale,'visible','off');
+    interval_selected = get(handles.interval_list,'Value');
+    if size(interval_selected,2)>1
+        set(handles.interval_list,'max',1,'value',1);
+    else
+        set(handles.interval_list,'max',1);
+    end   
     uistack(handles.amp_axis,'top');
     uistack(handles.phase_axis,'top');
-    
+    interval_list_Callback(hObject, eventdata, handles)
+        
 elseif  display_selected == 3
+    set(handles.fourier_scale,'visible','on');
+    uistack(handles.fourier_plot,'top');
     list = get(handles.interval_list,'String');
     set(handles.interval_list,'max',size(list,1));
-    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');
-    uistack(handles.fourier_plot,'top');
-    
+    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');        
     child_handles = allchild(handles.wt_pane);
     fs = str2double(get(handles.sampling_freq,'String'));
     
@@ -507,18 +522,15 @@ elseif  display_selected == 3
     
     interval_selected = get(handles.interval_list,'Value');
     signal_selected = get(handles.signal_list,'Value');
-    xl = csv_to_mvar(get(handles.xlim,'String'));
-    xl = xl.*fs;
-    xl(2) = min(xl(2),size(handles.sig,2));
-    xl(1) = max(xl(1),1);
     hold(handles.fourier_plot,'on');
     
-    [ft, ft_freq] = Fourier(handles.sig(signal_selected,xl(1):xl(2)),fs);
+    [ft, ft_freq] = Fourier(handles.sig(signal_selected,:),fs);
     plot(handles.fourier_plot,ft_freq,abs(ft),'linewidth',2);
     
     if isfield(handles,'bands')
         for i = 1:size(interval_selected,2)        
-            [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)}(1,xl(1):xl(2)),fs);
+            [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)}(1,:),fs);
+            
             plot(handles.fourier_plot,ft_freq,abs(ft));
         end
     end     
@@ -646,7 +658,7 @@ function interval_list_Callback(hObject, eventdata, handles)
                     delete(child_handles(i))
             end
         end
-
+        
         grid(handles.plot_pow,'on');
         grid(handles.plot3d,'on');
         hold(handles.plot3d,'on');     
@@ -659,21 +671,20 @@ function interval_list_Callback(hObject, eventdata, handles)
         y = fl(1)*[1 1];
         plot3(handles.plot3d,xl3d,y,z,'--r');    
         plot(handles.plot_pow,xlpow,y,'--r');
-
+        xlim(handles.plot_pow,xlpow);
         y = fl(2)*[1 1];
         plot3(handles.plot3d,xl3d,y,z,'--r');            
         plot(handles.plot_pow,xlpow,y,'--r');
     
     elseif display_selected == 2 
+        uistack(handles.amp_axis,'top');
+        uistack(handles.phase_axis,'top');
         if isempty(interval_selected) 
             return;
         end
-        fs = str2double(get(handles.sampling_freq,'String'));
+%         fs = str2double(get(handles.sampling_freq,'String'));
         xl = csv_to_mvar(get(handles.xlim,'String'));
-        xl = xl.*fs;
-        xl(2) = min(xl(2),size(handles.sig,2));
-        xl(1) = max(xl(1),1);
-        time_axis = xl(1)/fs:1/fs:xl(2)/fs;
+        
         if signal_selected == size(handles.sig,1)+1
             set(handles.signal_list,'Value',1);
             drawnow;
@@ -697,10 +708,12 @@ function interval_list_Callback(hObject, eventdata, handles)
         
         ht = hilbert(handles.bands{signal_selected,interval_selected});
         ht = angle(ht);
-            
-        plot(handles.amp_axis, time_axis, handles.bands{signal_selected,interval_selected}(1,xl(1):xl(2)));
-        plot(handles.phase_axis, time_axis, ht(1,xl(1):xl(2)));
         linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
+        plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected}(1,:));
+        plot(handles.phase_axis, handles.time_axis, ht(1,:));
+        xlim(handles.amp_axis,xl);
+        xlim(handles.phase_axis,xl);
+        
         xlabel(handles.phase_axis,'Time (s)');
         ylabel(handles.phase_axis,'Phase');
         ylabel(handles.amp_axis,'Filtered Signal');
@@ -1133,3 +1146,16 @@ xl(2) = min(xl(2),size(handles.sig,2));
 xl(1) = max(xl(1),1);
 sig = sig(:,xl(1):xl(2));
 save(save_location,'sig');
+
+
+function fourier_scale_Callback(hObject, eventdata, handles)
+% Hints: contents = cellstr(get(hObject,'String')) returns fourier_scale contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from fourier_scale
+
+contents = get(handles.fourier_scale,'String');
+scale = contents{get(hObject,'Value')};
+set(handles.fourier_plot,'xscale',scale,'yscale',scale);
+function fourier_scale_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
