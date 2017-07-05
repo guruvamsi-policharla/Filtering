@@ -888,7 +888,7 @@ function csv_read_Callback(hObject, eventdata, handles)
     for i = 2:size(sig,1)
         list{i,1} = sprintf('Signal %d',i);
     end
-    list{i+1,1} = sprintf('Average Plot(All)');
+    list{size(sig,1)+1,1} = sprintf('Average Plot(All)');
     set(handles.signal_list,'String',list);
     
     handles.sig = sig;   
@@ -940,7 +940,7 @@ function mat_read_Callback(hObject, eventdata, handles)
     for i = 2:size(sig,1)
         list{i,1} = sprintf('Signal %d',i);
     end
-    list{i+1,1} = sprintf('Average Plot(All)');
+    list{size(sig,1)+1,1} = sprintf('Average Plot(All)');
     set(handles.signal_list,'String',list); 
 
     
