@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 05-Jul-2017 18:17:35
+% Last Modified by GUIDE v2.5 06-Jul-2017 20:49:08
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -67,6 +67,7 @@ end
 
 function FilteringMulti_OpeningFcn(hObject, eventdata, handles, varargin)
 %screensize = get( groot, 'Screensize' );
+handles.calc_type = 1;
 movegui('center') 
 axes(handles.logo)
 matlabImage = imread('physicslogo.png');
@@ -89,7 +90,7 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 function sampling_freq_Callback(hObject, eventdata, handles)
-    %preprocess_Callback(hObject, eventdata, handles);
+    %detrend_signal_Callback(hObject, eventdata, handles);
 function sampling_freq_CreateFcn(hObject, eventdata, handles)
 
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
@@ -98,7 +99,7 @@ end
 function csv_save_Callback(hObject, eventdata, handles)
 function mat_save_Callback(hObject, eventdata, handles)
 function max_freq_Callback(hObject, eventdata, handles)
-    preprocess_Callback(hObject, eventdata, handles);
+    detrend_signal_Callback(hObject, eventdata, handles);
 function status_CreateFcn(hObject, eventdata, handles)
     set(hObject,'String','Please Import Signal');
 
@@ -111,7 +112,7 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 function min_freq_Callback(hObject, eventdata, handles)
-    preprocess_Callback(hObject, eventdata, handles)
+    detrend_signal_Callback(hObject, eventdata, handles)
 function min_freq_CreateFcn(hObject, eventdata, handles)
 
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
@@ -201,6 +202,15 @@ function display_type_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+function extraction_type_popup_Callback(hObject, eventdata, handles)
+function extraction_type_popup_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+function fourier_scale_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end 
 %--------------------------------------------------Unused Callbacks--------
 function status_Callback(hObject, eventdata, handles, msg)
 set(handles.status,'String',msg);
@@ -214,9 +224,12 @@ function elevation_Callback(hObject, eventdata, handles)
 view(handles.plot3d,[str2double(get(handles.azimuthal,'String')),str2double(get(handles.elevation,'String'))]);
 
 function sampling_rate_Callback(hObject, eventdata, handles)
-%Replots after changin sampling rate
+%Replots after changing sampling rate
     wavtr_Callback(hObject, eventdata, handles);
 
+function preprocess_Callback(hObject, eventdata, handles)
+%Replots after changing preprocessing
+    display_type_Callback(hObject, eventdata, handles);
 function intervals_Callback(hObject, eventdata, handles)
 %Marking lines on the graphs    
     intervals = csv_to_mvar(get(handles.intervals,'String'));    
@@ -255,7 +268,7 @@ function intervals_Callback(hObject, eventdata, handles)
         end       
     end
 
-function preprocess_Callback(hObject, eventdata, handles)
+function detrend_signal_Callback(hObject, eventdata, handles)
 %Detrending Part Visualisation
     cla(handles.plot_pp,'reset'); 
     L = size(handles.sig,2);
@@ -333,7 +346,7 @@ function signal_list_Callback(hObject, eventdata, handles)
         xlabel(handles.time_series, 'Time (s)');
         refresh_limits_Callback(hObject, eventdata, handles);%updates the values in the box
         cla(handles.plot_pp, 'reset');
-        preprocess_Callback(hObject, eventdata, handles);%plots the detrended curve
+        detrend_signal_Callback(hObject, eventdata, handles);%plots the detrended curve
         xlabel(handles.time_series, 'Time (s)');
         set(handles.status, 'String', 'Select Data And Continue With Wavelet Transform');
 
@@ -386,9 +399,12 @@ function wavlet_transform_Callback(hObject, eventdata, handles)
     time_axis = xl(1):1/fs:xl(2);
     if length(time_axis)>=2000
         screensize = max(get(groot,'Screensize'));
-        under_sample = floor(size(handles.sig,2)/screensize*3);%TODO improve reliability with screens
+        under_sample = floor(size(handles.sig,2)/screensize);%TODO improve reliability with screens
     else 
         under_sample = 1;
+    end
+    if handles.calc_type == 2
+        under_sample = ceil(under_sample*3.5);
     end
     handles.time_axis_us = time_axis(1:under_sample:end);
     n = size(handles.sig,1) ;
@@ -411,39 +427,7 @@ function wavlet_transform_Callback(hObject, eventdata, handles)
     %Calculating wavelet transform
     for p = 1:n
         status_Callback(hObject, eventdata, handles, sprintf('Calculating Wavelet Tranform of Signal %d/%d',p,n));
-        if(isnan(fmax)&& isnan(fmin))
-            if(isnan(fc))
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);            
-            else
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);  
-            end
-        elseif(isnan(fmax))
-            if(isnan(fc))
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
-            else
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
-            end
-        elseif(isnan(fmin))
-            if(isnan(fc))
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
-            else
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
-            end
-        else
-            if(isnan(fc))
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
-            else
-                        [WT,handles.freqarr]=wt(handles.sig_cut(p,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
-                        'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
-            end
-        end
+        wtwrapper;
         WTamp = abs(WT);
         WTpow = abs(WT).^2;
         handles.pow_arr{p,1} = nanmean(WTpow.');%Calculating Average Power
@@ -480,20 +464,33 @@ function filter_signal_Callback(hObject, eventdata, handles)
         for j =1:size(list,1)
             fl = csv_to_mvar(list{j,1});
             if extraction_type == 2
-                [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);%bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);     
+                warning off;
+                [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);
+                warning on;
             elseif extraction_type == 1         
                 
                 if(isnan(fc))
-                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges',cutedges_selected,...
+                        if handles.calc_type == 1
+                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges','off',...
                             'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
+                        else
+                            [WT,freqarr,wopt]=wft(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges','off',...
+                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
+                        end
                 else
-                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges',cutedges_selected,...
-                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
+                        if handles.calc_type == 1
+                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges','off',...
+                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+                        else
+                            [WT,freqarr,wopt]=wft(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges','off',...
+                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+                        end
                 end
-                
+                %Pre allocate for the cell structures
                 tfsupp = ecurve(WT,freqarr,wopt);
-                [handles.bands_iamp{i,j},handles.bands_iphi{i,j},handles.bands_freq{i,j}] = rectfr(tfsupp,WT,freqarr,wopt);            
+                [bands_iamp{i,j},handles.bands_iphi{i,j},handles.bands_freq{i,j}] = rectfr(tfsupp,WT,freqarr,wopt);            
                 handles.bands_iphi{i,j} = mod(handles.bands_iphi{i,j},2*pi) - pi;
+                handles.recon{i,j} = bands_iamp{i,j}.*cos(handles.bands_iphi{i,j});
             end
         end
     end
@@ -552,20 +549,65 @@ elseif  display_selected == 3
     signal_selected = get(handles.signal_list,'Value');
     hold(handles.fourier_plot,'on');
     
-    [ft, ft_freq] = Fourier(handles.sig(signal_selected,:),fs);
-    plot(handles.fourier_plot,ft_freq,abs(ft),'linewidth',2);
+    items = get(handles.preprocess,'String');
+    index_selected = get(handles.preprocess,'Value');
+    preprocess_selected = items{index_selected};
+        
+    if strcmp(preprocess_selected,'on')
+        [ft, ft_freq] = Fourier(handles.sig_pp{signal_selected,1},fs);
+    else
+        [ft, ft_freq] = Fourier(handles.sig(signal_selected,:),fs);
+    end
     
-    if isfield(handles,'bands')
+    
+    plot(handles.fourier_plot,ft_freq,abs(ft),'linewidth',2);
+    set(handles.fourier_plot,'fontunits','normalized','visible','on','xscale','log','yscale','log','xlim',[handles.freqarr(1) handles.freqarr(end)]);
+    
+    extraction_type = get(handles.extraction_type_popup,'Value');
+    if isfield(handles,'bands') && extraction_type == 2
         for i = 1:size(interval_selected,2)        
-            [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)}(1,:),fs);
-            
-            plot(handles.fourier_plot,ft_freq,abs(ft));
+            [ft, ft_freq] = Fourier(handles.bands{signal_selected,interval_selected(i)},fs);            
+            plot(handles.fourier_plot,ft_freq,abs(ft));            
+            fl = csv_to_mvar(list{interval_selected(i),1});
+            yl = get(handles.fourier_plot,'ylim');
+            x = fl(1)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+            x = fl(2)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+        end
+        yl = get(handles.fourier_plot,'ylim'); 
+        for i = 1:size(interval_selected,2)   
+            fl = csv_to_mvar(list{interval_selected(i),1});            
+            x = fl(1)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+            x = fl(2)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
         end
     end     
     
+    if isfield(handles,'bands_iphi') && extraction_type == 1
+        for i = 1:size(interval_selected,2)        
+            [ft, ft_freq] = Fourier(handles.recon{signal_selected,interval_selected(i)},fs);            
+            plot(handles.fourier_plot,ft_freq,abs(ft));            
+            fl = csv_to_mvar(list{interval_selected(i),1});
+            yl = get(handles.fourier_plot,'ylim');
+            x = fl(1)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+            x = fl(2)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+        end
+        yl = get(handles.fourier_plot,'ylim'); 
+        for i = 1:size(interval_selected,2)   
+            fl = csv_to_mvar(list{interval_selected(i),1});            
+            x = fl(1)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+            x = fl(2)*[1 1];
+            plot(handles.fourier_plot,x,yl,'-k');
+        end
+    end
+    
     xlabel(handles.fourier_plot,'Frequency (Hz)')
     ylabel(handles.fourier_plot,'FT Power')
-    set(handles.fourier_plot,'fontunits','normalized','visible','on','xscale','log','yscale','log','xlim',[handles.freqarr(1) handles.freqarr(end)]);
 end
 
 function wavtr_Callback(hObject, eventdata, handles)
@@ -580,7 +622,7 @@ function wavtr_Callback(hObject, eventdata, handles)
                 set(child_handles(i),'visible','off')                
             end
         end
- 
+    
         set(handles.cum_avg,'visible','on');
         hold(handles.cum_avg,'on');
         size(handles.sig,1)
@@ -668,6 +710,11 @@ function wavtr_Callback(hObject, eventdata, handles)
     grid(handles.plot3d,'on');
     guidata(hObject,handles);
 
+function fourier_scale_Callback(hObject, eventdata, handles)
+    contents = get(handles.fourier_scale,'String');
+    scale = contents{get(hObject,'Value')};
+    set(handles.fourier_plot,'xscale',scale,'yscale',scale);
+   
 %--------------------------------Marking the intervals---------------------
 function interval_list_Callback(hObject, eventdata, handles)
 %Controlling what the interval list does
@@ -675,6 +722,10 @@ function interval_list_Callback(hObject, eventdata, handles)
     display_selected = get(handles.display_type,'Value');
     signal_selected = get(handles.signal_list,'Value');
     list = get(handles.interval_list,'String');    
+    
+    if isempty(list)
+        return;
+    end
     
     if display_selected ==1
         fl = csv_to_mvar(cell2mat(list(interval_selected)));  
@@ -729,7 +780,7 @@ function interval_list_Callback(hObject, eventdata, handles)
         set(handles.amp_axis,'visible','on');
         set(handles.phase_axis,'visible','on');
         
-        if ~isfield(handles,'bands') && ~isfield(handles,'bands_iamp')
+        if ~isfield(handles,'bands') && ~isfield(handles,'bands_iphi')
             return;
         end
         hold(handles.amp_axis,'on');
@@ -757,8 +808,8 @@ function interval_list_Callback(hObject, eventdata, handles)
         
         elseif extraction_type == 1
             for i = 1:size(interval_selected,2)
-                amplitude = handles.bands_iamp{signal_selected,interval_selected(i)}.*cos(handles.bands_iphi{signal_selected,interval_selected(i)});
-                plot(handles.amp_axis, handles.time_axis, amplitude);
+                %amplitude = handles.bands_iamp{signal_selected,interval_selected(i)}.*cos(handles.bands_iphi{signal_selected,interval_selected(i)});
+                plot(handles.amp_axis, handles.time_axis, handles.recon{signal_selected,interval_selected(i)});
                 plot(handles.phase_axis, handles.time_axis,handles.bands_iphi{signal_selected,interval_selected(i)});
             end
             linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
@@ -954,7 +1005,7 @@ function csv_read_Callback(hObject, eventdata, handles)
     guidata(hObject,handles);    
     refresh_limits_Callback(hObject, eventdata, handles);%updates the values in the box    
     cla(handles.plot_pp,'reset');
-    preprocess_Callback(hObject, eventdata, handles);%plots the detrended curve
+    detrend_signal_Callback(hObject, eventdata, handles);%plots the detrended curve
     xlabel(handles.time_series,'Time (s)');
     set(handles.status,'String','Select Data And Continue With Wavelet Transform');
     %set(handles.signal_length,'String',strcat(num2str(size(sig,2)/fs/60),' minutes'));
@@ -1008,7 +1059,7 @@ function mat_read_Callback(hObject, eventdata, handles)
     refresh_limits_Callback(hObject, eventdata, handles);%updates the values in the box
     guidata(hObject,handles);  
     cla(handles.plot_pp,'reset');
-    preprocess_Callback(hObject, eventdata, handles);%plots the detrended curve
+    detrend_signal_Callback(hObject, eventdata, handles);%plots the detrended curve
     xlabel(handles.time_series,'Time (s)');
     set(handles.status,'String','Select Data And Continue With Wavelet Transform');
 %    set(handles.signal_length,'String',strcat(num2str(size(sig,2)/fs/60),' minutes'));
@@ -1023,10 +1074,6 @@ function xlim_Callback(hObject, eventdata, handles)
     t = xl(2) - xl(1);
     set(handles.length,'String',t);
 
-% function ylim_Callback(hObject, eventdata, handles)
-% %When the values of ylim are changed the graphs are updated  
-%     yl = csv_to_mvar(get(handles.ylim,'String'));
-%     ylim(handles.time_series,yl);
 
 %---------------------------Updating Value of limits Limits-----------------------------
 function refresh_limits_Callback(hObject, eventdata, handles)
@@ -1036,11 +1083,7 @@ function refresh_limits_Callback(hObject, eventdata, handles)
     t = x(2) - x(1);
     x = strcat(num2str(x(1)),' , ',num2str(x(2)));    
     
-    y = get(handles.time_series,'ylim');
-    y = strcat(num2str(y(1)),' , ',num2str(y(2)));
-    
     set(handles.xlim,'String',x);
-%    set(handles.ylim,'String',y);
     set(handles.length,'String',t);
     
 % ---------------------------Zoom Updating--------------------------
@@ -1051,11 +1094,7 @@ function zoom_in_OffCallback(hObject, eventdata, handles)
     t = x(2) - x(1);
     x = strcat(num2str(x(1)),' , ',num2str(x(2)));    
     
-    y = get(handles.time_series,'ylim');
-    y = strcat(num2str(y(1)),' , ',num2str(y(2)));
-    
     set(handles.xlim,'String',x);
- %   set(handles.ylim,'String',y);
     set(handles.length,'String',t);
 
 % -----------------------------Zoom Updating--------------------------
@@ -1066,11 +1105,7 @@ function zoom_out_OffCallback(hObject, eventdata, handles)
     t = x(2) - x(1);
     x = strcat(num2str(x(1)),' , ',num2str(x(2)));    
     
-    y = get(handles.time_series,'ylim');
-    y = strcat(num2str(y(1)),' , ',num2str(y(2)));
-    
     set(handles.xlim,'String',x);
-%    set(handles.ylim,'String',y);
     set(handles.length,'String',t);
     
 function plot_type_SelectionChangeFcn(hObject, eventdata, handles)
@@ -1086,7 +1121,22 @@ function plot_type_SelectionChangeFcn(hObject, eventdata, handles)
     guidata(hObject,handles); 
     wavtr_Callback(hObject, eventdata, handles)
     guidata(hObject,handles); 
-    
+
+function calc_type_SelectionChangedFcn(hObject, eventdata, handles)
+%Deciding which type of calculation
+    switch get(eventdata.NewValue,'Tag') % Get Tag of selected object.
+        case 'wav'
+            handles.calc_type = 1;
+            list = {'Lognorm';'Morlet';'Bump'};
+            set(handles.wavelet_type,'String',list);
+        case 'four'
+            handles.calc_type = 2;
+            list = {'Hann';'Gaussian';'Blackman';'Exp';'Rect';'Kaiser-a'};
+            set(handles.wavelet_type,'String',list);    
+    end        
+    drawnow;
+    guidata(hObject,handles);
+   
 % ----------------------------------------Saving Files---------------
 function save_Callback(hObject, eventdata, handles)
 %Honestly you're just here because I don't know how to get rid of you
@@ -1200,36 +1250,4 @@ sig = sig(:,xl(1):xl(2));
 save(save_location,'sig');
 
 
-function fourier_scale_Callback(hObject, eventdata, handles)
-% Hints: contents = cellstr(get(hObject,'String')) returns fourier_scale contents as cell array
-%        contents{get(hObject,'Value')} returns selected item from fourier_scale
 
-contents = get(handles.fourier_scale,'String');
-scale = contents{get(hObject,'Value')};
-set(handles.fourier_plot,'xscale',scale,'yscale',scale);
-function fourier_scale_CreateFcn(hObject, eventdata, handles)
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-% --- Executes on selection change in extraction_type_popup.
-function extraction_type_popup_Callback(hObject, eventdata, handles)
-% hObject    handle to extraction_type_popup (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: contents = cellstr(get(hObject,'String')) returns extraction_type_popup contents as cell array
-%        contents{get(hObject,'Value')} returns selected item from extraction_type_popup
-
-
-% --- Executes during object creation, after setting all properties.
-function extraction_type_popup_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to extraction_type_popup (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: popupmenu controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end

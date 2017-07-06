@@ -1,5 +1,5 @@
 %================== Extract ridge curve from WFT or WT ====================
-% Version 2.10 stable
+% Version 2.20 stable
 %-------------------------------Copyright----------------------------------
 %
 % Author: Dmytro Iatsenko
@@ -73,7 +73,7 @@
 %      profile [efreq]; to select just ridge points nearest to [efreq]
 %      (on a logarithmic scale for WT), use imaginary profile 1i*[efreq],
 %      but this approach is more susceptible to noise and other effects.
-% 'Param':[alpha,beta] - for methods 2 and 3 (default = [1,1])
+% 'Param':[alpha,beta] - for method 2 (default = [1,1])
 %                alpha - for method 1 (default = 1)
 %                   [] - for all other methods (no parameters)
 %    - parameters for each method, as described in [3].
@@ -110,26 +110,23 @@
 %      where Q_p(t_n) denotes the ridge amplitudes at time t_n.
 % 'PenalFunc': 1x2 cell with two functions {func1,func2}
 %    - penalization functions used for curve extraction. For the WFT:
-%      method 1 - {@(drf),@(rf)}, where [drf] and [rf] denote respectively
-%      the difference between two consecutive ridge frequencies and ridge
-%      frequency, all in Hz  (default = {@(drf)-(p(1)/2)*(drf/cv)^2/2,[]},
-%      where p(1) is the parameter of the method (see 'Param' property) and
-%      [cv] is the sampling frequency multiplied on the typical frequency
-%      growth rate for the current window parameters; by default there is
-%      no discrimination over [rf], so second function is empty matrix []);
-%      method 2 - {@(drf,m,s),@(rf,m,s)}, where [m] and [s] are the
-%      corresponding means and standard deviations of [drf] and [rf]
-%      (default = {@(drf,m,s)-(p(1)/2)*((drf-m)./s).^2,
-%      @(rf,m,s)-(p(2)/2)*((rf-m)./s).^2/2});
-%      method 3 - {@(log(P1)),@(log(P2))}, where [P1] and [P2] are the
-%      distributions of the [drf] and [rf], respectively (default =
-%      @(x)-p(1)*x,@(x)-p(2)*x).
+%      Method 1 - {@(drf,Xdrf),@(rf,Xrf)}, where [rf] and [drf] denote the
+%      ridge frequency (in Hz) and its time derivative (difference between
+%      two consecutive ridge frequencies times signal sampling frequency),
+%      while [Xrf] and [Xdrf] are minimal resolvable frequency difference
+%      and the characteristic rate of frequency change ($\Delta\xi_g/2\pi$
+%      and $(\Delta\xi_g/2\pi)/\Delta\tau_g$ in notation of [1]); default =
+%      = {@(drf,Xdrf)-p(1)*abs(drf./Xdrf),[]}, where p(1) is the parameter
+%      of the method (see 'Param' property), while empty matrix [] means
+%      no discrimination over [rf]).
+%      Method 2 - {@(drf,m,s),@(rf,m,s)}, where [m] and [s] are (adaptively
+%      chosen and refined) medians and quantiles of [drf] and [rf]; default
+%      = {@(drf,m,s)-p(1)*abs((drf-m)./s),@(rf,m,s)-p(2)*abs((rf-m)./s)}).
 %      For the WT all is the same but all frequency variables are taken
 %      on a logarithmic scale, so that e.g. [rf] and [drf] now denote the
-%      logarithms of the ridge frequencies and their differences between
-%      the consecutive ridges. Note, that 'PenalFunc' property overrides
-%      the 'Param' property, so the functions should be specified with all
-%      the parameters included inside.
+%      logarithms of the ridge frequencies and their time derivatives.
+%      Note, that 'PenalFunc' property overrides the 'Param' property, so
+%      the functions should be specified with all the parameters.
 % 'PathOpt':{{'on'}}|'off'
 %    - optimize the ridge curve over all possible trajectories ('on') or
 %      use the one-step approach ('off'), see [3]; the path optimization
@@ -138,13 +135,13 @@
 %      fast algorithm of [3]), so DO NOT CHANGE THIS PROPERTY unless you
 %      want to just play and see the advantages of the path optimization
 %      over the one-step approach; note, that this property applies only
-%      to methods 1,2,3, as the others are simple one-step approaches.
+%      to methods 1 and 2, as the others are simple one-step approaches.
 % 'Skel': {{[]}} | 4x1 cell returned as the third output of ecurve.m
 %    - can be specified to avoid performing search of the peaks, their
 %      numbers and corresponding amplitudes each time if the procedures
 %      are applied to the same TFR (e.g. one compares the performance of
 %      the different schemes).
-% 'MaxIter': value (default = 20) /methods 2 and 3 only/
+% 'MaxIter': value (default = 20) /method 2 only/
 %    - maximum number of iterations allowed for methods 2 and 3 to converge
 %
 %----------------------- Additional possibilities -------------------------
@@ -163,9 +160,16 @@
 %
 %------------------------------Changelog-----------------------------------
 %
+% v2.20:
+% - some minor changes and fixes
+% - changed slightly specifications of some properties
+% - to make methods slightly more universal, changed penalization over both
+%   frequency difference and frequency to the 1st order in both methods,
+%   plus in method 2 changed mean/std to median/range
+% - removed third scheme, as it always works worse than the other ones
 % v2.10:
 % - in methods 1 and 2, the frequency differences are now penalized to
-%   the second order (instead of the first order, as was before)
+%   the 2nd order (instead of the first order, as was before)
 % - added possibility of normalization (see Properties)
 % - some minor changes
 % v2.00:
@@ -185,7 +189,6 @@ tfsupp=zeros(3,L)*NaN; pind=zeros(1,L)*NaN; pamp=zeros(1,L)*NaN; idr=zeros(1,L)*
 %Default parameters
 method=2; pars=[]; NormMode='off'; DispMode='on'; PlotMode='off';
 Skel=[]; PathOpt='on'; AmpFunc=@(x)log(x); PenalFunc={[],[]}; MaxIter=20;
-iparm='median'; %method for estimation of initial parameters for II scheme
 %Update if user-defined
 vst=1;
 if nargin>3 && isstruct(varargin{1})
@@ -257,7 +260,7 @@ end
 
 %//////////////////////////////////////////////////////////////////////////
 TFR=abs(TFR); %convert to absolute values, since we need only them; also improves computational speed as TFR is no more complex and is positive
-tn1=find(~isnan(TFR(end,:)),1,'first'); tn2=find(~isnan(TFR(end,:)),1,'last'); sflag=0;
+nfunc=ones(NF,1); tn1=find(~isnan(TFR(end,:)),1,'first'); tn2=find(~isnan(TFR(end,:)),1,'last'); sflag=0;
 if (ischar(method) && ~strcmpi(method,'max')) || length(method)==1 %if not frequency-based or maximum-based extraction
     sflag=1;
     %----------------------------------------------------------------------
@@ -321,7 +324,7 @@ if (ischar(method) && ~strcmpi(method,'max')) || length(method)==1 %if not frequ
         clear idb NB G4;
     end
     if nargout>2, varargout{2}={Np,Ip,Fp,Qp}; end
-    nfunc=ones(NF,1); if strcmpi(NormMode,'on'), nfunc=tfrnormalize(abs(TFR(:,tn1:tn2)),freq); end
+    if strcmpi(NormMode,'on'), nfunc=tfrnormalize(abs(TFR(:,tn1:tn2)),freq); end
     ci=Ip; ci(isnan(ci))=NF+2; cm=ci-floor(ci); ci=floor(ci); nfunc=[nfunc(1);nfunc(:);nfunc(end);NaN;NaN];
     Rp=(1-cm).*nfunc(ci+1)+cm.*nfunc(ci+2); Wp=AmpFunc(Qp.*Rp); nfunc=nfunc(2:end-3); %apply the functional to amplitude peaks
     
@@ -406,9 +409,10 @@ elseif ~ischar(method) && length(method)>1 %frequency-based extraction
         title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
         plot(ax(1),(0:L-1)/fs,efreq,'--','Color',[0.5,0.5,0.5],'LineWidth',2,'DisplayName','Specified frequency profile');
         plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Extracted frequency profile');
-        legend(ax(1),'show');
+        legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
     end
     if ~isempty(strfind(PlotMode,'on')), plotfinal(tfsupp,TFR,freq,fs,DispMode,PlotMode); end
+    if nargout>2, varargout{2}=Skel; end
     
     return;
 end
@@ -452,7 +456,7 @@ if strcmpi(method,'max') || length(pars)==2
         ax=axes('Position',[0.1,0.1,0.8,0.8],'FontSize',16); hold all;
         title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
         plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Global Maximum curve');
-        legend(ax(1),'show');
+        legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
     end
 end
 
@@ -481,7 +485,7 @@ if strcmpi(method,'nearest')
         plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Nearest Neighbour curve');
         plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ob','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','r',...
             'DisplayName','Starting point (overall maximum of TFR amplitude)');
-        legend(ax(1),'show');
+        legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
     end
 end
 
@@ -492,8 +496,8 @@ if length(pars)==1
         fprintf('Extracting the curve by I scheme.\n');
     end
     %Define the functionals
-    if isempty(PenalFunc{1}), logw1=@(x)-(pars(1)/2)*(fs*x/DD).^2; else logw1=PenalFunc{1}; end
-    if isempty(PenalFunc{2}), logw2=[]; else logw2=PenalFunc{2}; end
+    if isempty(PenalFunc{1}), logw1=@(x)-pars(1)*abs(fs*x/DD); else logw1=@(x)PenalFunc{1}(fs*x,DD); end
+    if isempty(PenalFunc{2}), logw2=[]; else logw2=@(x)PenalFunc{2}(x,DF); end
     %Main part
     if strcmpi(PathOpt,'on'), idr=pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode);
     else [idr,timax,fimax]=onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode); end
@@ -510,7 +514,7 @@ if length(pars)==1
             plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ob','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','r',...
                 'DisplayName','Starting point (overall maximum of local functional)');
         end
-        legend(ax(1),'show');
+        legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
     end
 end
 
@@ -518,31 +522,18 @@ end
 %----------------------------- Method II ----------------------------------
 if length(pars)==2 && method==2
     %Initialize the parameters
-    pf=tfsupp(1,:); if fres==2, pf=log(pf); end
-    if strcmpi(iparm,'median')
-        mv=[median(diff(pf)),0,median(pf),0];
-        mv(2)=sqrt(median((diff(pf)-mv(1)).^2));
-        mv(4)=sqrt(median((pf-mv(3)).^2));
-        %{
-        %through percentiles
-        mv=[median(diff(pf)),0,median(pf),0];
-        pp=[0.5,1]; ss1=sort(diff(pf(tn1:tn2))); ss2=sort(pf(tn1:tn2)); CL=tn2-tn1+1;
-        mv(2)=pp(2)*(ss1(round((0.5+pp(1)/2)*CL))-ss1(round((0.5-pp(1)/2)*CL)));
-        mv(4)=pp(2)*(ss2(round((0.5+pp(1)/2)*CL))-ss2(round((0.5-pp(1)/2)*CL)));
-        %}
-    else
-        mv=[mean(diff(pf)),std(diff(pf)),mean(pf),std(pf)];
-    end
+    pf=tfsupp(1,tn1:tn2); if fres==2, pf=log(pf); end, dpf=diff(pf);
+    mv=[median(dpf),0,median(pf),0];
+    ss1=sort(dpf); CL=length(ss1); mv(2)=ss1(round(0.75*CL))-ss1(round(0.25*CL));
+    ss2=sort(pf); CL=length(ss2); mv(4)=ss2(round(0.75*CL))-ss2(round(0.25*CL));
     
     %Display, if needed
     if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
         if fres==1
-            str0='median+-median std'; if ~strcmpi(iparm,'median'), str0='mean+-std'; end
-            fprintf(['Maximums frequencies (',str0,'): ']);
+            fprintf(['Maximums frequencies (median+-range): ']);
             fprintf('%0.3f+-%0.3f Hz; frequency differences: %0.3f+-%0.3f Hz.\n',mv(3),mv(4),mv(1),mv(2));
         else
-            str0='log-median*/median ratio'; if ~strcmpi(iparm,'median'), str0='log-mean*/mean ratio'; end
-            fprintf(['Maximums frequencies (',str0,'): ']);
+            fprintf(['Maximums frequencies (log-median*/range ratio): ']);
             fprintf('%0.3f*/%0.3f Hz; frequency ratios: %0.3f*/%0.3f.\n',exp(mv(3)),exp(mv(4)),exp(mv(1)),exp(mv(2)));
         end
         fprintf('Extracting the curve by II scheme: iteration discrepancy - ');
@@ -550,18 +541,18 @@ if length(pars)==2 && method==2
             scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
             ax=zeros(3,1);
             ax(1)=axes('Position',[0.1,0.6,0.8,0.3],'FontSize',16); hold all;
+            if fres==2, set(ax(1),'YScale','log'); end
             ax(2)=axes('Position',[0.1,0.1,0.35,0.35],'FontSize',16); hold all;
             ax(3)=axes('Position',[0.55,0.1,0.35,0.35],'FontSize',16); hold all;
             title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            ylabel(ax(2),'Frequency (Hz)'); xlabel(ax(3),'Iteration number');
-            title(ax(2),'\langle\Delta\omega_p\rangle/2\pi (solid), std[\Delta\omega_p]/2\pi (dashed)');
-            ylabel(ax(3),'Frequency (Hz)'); xlabel(ax(2),'Iteration number');
-            title(ax(3),'\langle\omega_p\rangle/2\pi (solid), std[\omega_p]/2\pi (dashed)');
+            ylabel(ax(2),'Frequency (Hz)'); ylabel(ax(3),'Frequency (Hz)'); xlabel(ax(3),'Iteration number'); xlabel(ax(2),'Iteration number');
+            title(ax(2),'${\rm m}[d\omega_p/dt]/2\pi$ (solid), ${\rm s}[d\omega_p/dt]/2\pi$ (dashed)','interpreter','Latex','FontSize',20);
+            title(ax(3),'${\rm m}[\omega_p]/2\pi$ (solid), ${\rm s}[\omega_p]/2\pi$ (dashed)','interpreter','Latex','FontSize',20);
             line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),':','Color',[0.5,0.5,0.5],'DisplayName','Global Maximum ridges');
-            line1=plot(ax(2),0,mv(1),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','\langle\Delta\omega_p\rangle/2\pi');
-            line2=plot(ax(2),0,mv(2),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','std[\Delta\omega_p]/2\pi');
-            line3=plot(ax(3),0,mv(3),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','\langle\omega_p\rangle/2\pi');
-            line4=plot(ax(3),0,mv(4),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','std[\omega_p]/2\pi');
+            line1=plot(ax(2),0,fs*mv(1),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','m[d\omega_p/dt]/2\pi');
+            line2=plot(ax(2),0,fs*mv(2),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','s[d\omega_p/dt]/2\pi');
+            line3=plot(ax(3),0,mv(3),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','m[\omega_p]/2\pi');
+            line4=plot(ax(3),0,mv(4),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','s[\omega_p]/2\pi');
         end
     end
     
@@ -573,8 +564,8 @@ if length(pars)==2 && method==2
         smv=[mv(2),mv(4)]; %to avoid underflow
         if smv(1)<=0, smv(1)=10^(-32)/fs; end
         if smv(2)<=0, smv(2)=10^(-16); end
-        if isempty(PenalFunc{1}), logw1=@(x)-(pars(1)/2)*((x-mv(1))/smv(1)).^2; else logw1=@(x)PenalFunc{1}(x,mv(1),smv(1)); end
-        if isempty(PenalFunc{2}), logw2=@(x)-(pars(2)/2)*((x-mv(3))/smv(2)).^2; else logw2=@(x)PenalFunc{2}(x,mv(3),smv(2)); end
+        if isempty(PenalFunc{1}), logw1=@(x)-pars(1)*abs((x-mv(1))/smv(1)); else logw1=@(x)PenalFunc{1}(x,mv(1),smv(1)); end
+        if isempty(PenalFunc{2}), logw2=@(x)-pars(2)*abs((x-mv(3))/smv(2)); else logw2=@(x)PenalFunc{2}(x,mv(3),smv(2)); end
         %Calculate all
         pind0=pind;
         if strcmpi(PathOpt,'on'), idr=pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode);
@@ -583,18 +574,11 @@ if length(pars)==2 && method==2
         tfsupp(1,tn1:tn2)=Fp(lid); pind(tn1:tn2)=round(Ip(lid)); pamp(tn1:tn2)=Qp(lid);
         rdiff=length(find(pind(tn1:tn2)-pind0(tn1:tn2)~=0))/(tn2-tn1+1);
         itn=itn+1;
-        %Update the averages
-        pf=tfsupp(1,:); if fres==2, pf=log(pf); end
-        mv=[mean(diff(pf)),0,mean(pf),0];
-        mv(2)=sqrt(mean((diff(pf)-mv(1)).^2));
-        mv(4)=sqrt(mean((pf-mv(3)).^2));
-        %{
-        %through percentiles
-        mv=[median(diff(pf)),0,median(pf),0];
-        pp=[0.5,1]; ss1=sort(diff(pf(tn1:tn2))); ss2=sort(pf(tn1:tn2)); CL=tn2-tn1+1;
-        mv(2)=pp(2)*(ss1(round((0.5+pp(1)/2)*CL))-ss1(round((0.5-pp(1)/2)*CL)));
-        mv(4)=pp(2)*(ss2(round((0.5+pp(1)/2)*CL))-ss2(round((0.5-pp(1)/2)*CL)));
-        %}
+        %Update the medians/ranges
+        pf=tfsupp(1,tn1:tn2); if fres==2, pf=log(pf); end, dpf=diff(pf);
+        mv=[median(dpf),0,median(pf),0];
+        ss1=sort(dpf); CL=length(ss1); mv(2)=ss1(round(0.75*CL))-ss1(round(0.25*CL));
+        ss2=sort(pf); CL=length(ss2); mv(4)=ss2(round(0.75*CL))-ss2(round(0.25*CL));
         %Update the information structure, if needed
         if nargout>1
             ec.pfreq=[ec.pfreq;tfsupp(1,:)]; ec.pind=[ec.pind;pind]; ec.pamp=[ec.pamp;pamp]; ec.idr=[ec.idr;idr];
@@ -605,8 +589,8 @@ if length(pars)==2 && method==2
             fprintf('%0.2f%%; ',100*rdiff);
             if ~isempty(strfind(DispMode,'plot'))
                 line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'DisplayName',sprintf('Iteration %d (discrepancy %0.2f%%)',itn,100*rdiff));
-                set(line1,'XData',0:itn,'YData',[get(line1,'YData'),mv(1)]);
-                set(line2,'XData',0:itn,'YData',[get(line2,'YData'),mv(2)]);
+                set(line1,'XData',0:itn,'YData',[get(line1,'YData'),fs*mv(1)]);
+                set(line2,'XData',0:itn,'YData',[get(line2,'YData'),fs*mv(2)]);
                 set(line3,'XData',0:itn,'YData',[get(line3,'YData'),mv(3)]);
                 set(line4,'XData',0:itn,'YData',[get(line4,'YData'),mv(4)]);
                 if ~strcmpi(PathOpt,'on'),
@@ -615,7 +599,15 @@ if length(pars)==2 && method==2
                 end
             end
         end
-        %Check for "cycling" and maximum iterations
+        %Stop if maximum number of iterations has been reached
+        if itn>MaxIter && rdiff~=0
+            if ~strcmpi(DispMode,'off')
+                if ~strcmpi(DispMode,'notify'), fprintf('\n'); end
+                fprintf('WARNING! Did not fully converge in %d iterations (current ''MaxIter''). Using the last estimate.',MaxIter);
+            end
+            break;
+        end
+        %Just in case, check for ``cycling'' (does not seem to occur in practice)
         allpind(itn+1,:)=pind; gg=Inf;
         if rdiff~=0 && itn>2
             for kn=2:itn-1, gg=min([gg,length(find(pind(tn1:tn2)-allpind(kn,tn1:tn2)~=0))]); end
@@ -626,174 +618,23 @@ if length(pars)==2 && method==2
             end
             break;
         end
-        if itn>MaxIter, break; end
+        
     end
     
-    if ~strcmpi(DispMode,'off')
-        if ~strcmpi(DispMode,'notify'), fprintf('\n'); end
-        if itn>MaxIter
-            fprintf(2,sprintf('Warning: Not converged within MaxIter=%d iterations; the latest curve estimate is used.\n',MaxIter));
-        end
-        if ~isempty(strfind(DispMode,'plot'))
-            set(line0,'Color','k','LineWidth',2);
-            if ~strcmpi(PathOpt,'on'), set(mpt,'Color',b,'MarkerFaceColor','k'); end
-            if fres==2 %change plot if the resolution is logarithmic
-                set(ax(2:3),'YScale','log');
-                set(line1,'YData',exp(get(line1,'YData')),'DisplayName','exp(\langle\Deltalog\omega_p\rangle)');
-                set(line2,'YData',exp(get(line2,'YData'))-1,'DisplayName','exp(std[\Deltalog\omega_p])-1');
-                set(line3,'YData',exp(get(line3,'YData')),'DisplayName','exp(\langlelog\omega_p\rangle)/2\pi');
-                set(line4,'YData',exp(get(line4,'YData'))-1,'DisplayName','exp(std[log\omega_p])-1');
-                ylabel(ax(2),'Frequency Ratio'); ylabel(ax(3),'Frequency (Hz)');
-                title(ax(2),'exp(\langle\Deltalog\omega_p\rangle) (solid), exp(std[\Deltalog\omega_p])-1 (dashed)');
-                title(ax(3),'exp(\langlelog\omega_p\rangle)/2\pi (solid), exp(std[log\omega_p])-1 (dashed)');
-                set(ax(2),'YLim',[0.75*min(get(line2,'YData')),1.5*max(get(line1,'YData'))]);
-                set(ax(3),'YLim',[0.75*min(get(line4,'YData')),1.5*max(get(line3,'YData'))]);
-            end
-        end
-    end
-    
-end
-
-%----------------------------- Method III ---------------------------------
-if length(pars)==2 && method==3
-    %Initialize the distributions
-    P1=zeros(1,2*NF+1); P2=zeros(1,NF+2);
-    pf=tfsupp(1,:); gf=freq; rf=Fp; if fres==2, pf=log(pf); gf=log(gf); rf=log(rf); end
-    ci=1+(diff(pf)-dfreq(1))/fstep; cm=ci-floor(ci); ci=floor(ci);
-    for tn=tn1:tn2-1, P1(ci(tn)+1)=P1(ci(tn)+1)+1-cm(tn); P1(ci(tn)+2)=P1(ci(tn)+2)+cm(tn); end
-    ci=1+(rf-gf(1))/fstep; cm=ci-floor(ci); ci=floor(ci);
-    for tn=tn1:tn2
-        for pn=1:Np(tn)
-            cci=ci(pn,tn); ccm=cm(pn,tn);
-            P2(cci+1)=P2(cci+1)+(1-ccm)*Qp(pn,tn).*Rp(pn,tn);
-            P2(cci+2)=P2(cci+2)+ccm*Qp(pn,tn).*Rp(pn,tn);
-        end
-    end
-    P1=P1(2:end-1); P2=P2(2:end-1);
-    
-    %Display, if needed
-    if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
-        ss2=sort(tfsupp(1,tn1:tn2)); CL2=length(ss2);
-        if fres==1
-            ss1=sort(diff(tfsupp(1,tn1:tn2))); CL1=length(ss1);
-            fprintf('Maximums frequencies (median and 75%% range): %0.3f [%0.3f,%0.3f] Hz; frequency differences: %0.3f [%0.3f,%0.3f] Hz.\n',...
-                median(ss2),ss2(round(0.125*CL2)),ss2(round(0.875*CL2)),median(ss1),ss1(round(0.125*CL1)),ss1(round(0.875*CL1)));
-        else
-            ss1=sort(exp(diff(log(tfsupp(1,tn1:tn2))))); CL1=length(ss1);
-            fprintf('Maximums frequencies (median and 75%% range): %0.3f [%0.3f,%0.3f] Hz; frequency ratios: %0.3f [%0.3f,%0.3f].\n',...
-                median(ss2),ss2(round(0.125*CL2)),ss2(round(0.875*CL2)),median(ss1),ss1(round(0.125*CL1)),ss1(round(0.875*CL1)));
-        end
-        fprintf('Extracting the curve by III scheme: iteration discrepancy - ');
-        if ~isempty(strfind(DispMode,'plot'))
-            cdfreq=dfreq; cxlim=[-DD,DD]; if fres==2, cdfreq=exp(cdfreq); cxlim=exp(cxlim); end
-            scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-            ax=zeros(3,1);
-            ax(1)=axes('Position',[0.1,0.6,0.8,0.3],'FontSize',16); hold all;
-            ax(2)=axes('Position',[0.1,0.1,0.35,0.35],'FontSize',16,'XLim',cxlim); hold all;
-            ax(3)=axes('Position',[0.55,0.1,0.35,0.35],'FontSize',16,'XLim',[freq(1),freq(end)]); hold all;
-            xlabel(ax(2),'\Delta\nu/2\pi (Hz)'); title(ax(2),'P_1(\Delta\nu) (normalized on max)');
-            xlabel(ax(3),'\nu/2\pi (Hz)'); title(ax(3),'P_2(\nu) (normalized on max)');
-            title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),':','Color',[0.5,0.5,0.5],'DisplayName','Global Maximum ridges');
-            line1=plot(ax(2),cdfreq,P1/max(P1),':','Color',[0.5,0.5,0.5],'DisplayName','Initial (from global maximums)');
-            line2=plot(ax(3),freq,P2/max(P2),':','Color',[0.5,0.5,0.5],'DisplayName','Initial (from global maximums)');
-        end
-    end
-    
-    %Iterate
-    rdiff=NaN; itn=0; allpind=zeros(10,L); allpind(1,:)=pind;
-    if nargout>1, ec.P1=P1; ec.P2=P2; ec.rdiff=rdiff; end
-    while rdiff~=0
-        %Construct the functionals
-        logw1=pars(1)*log(P1); logw2=pars(2)*log(P2);
-        ii=find(P1(1:end-1).*P1(2:end)>0 & abs(P1(1:end-1)+P1(2:end)-1)<=2*eps); logw1(ii)=-Inf; logw1(ii+1)=-Inf;
-        if itn>0, ii=find(P2(1:end-1).*P2(2:end)>0 & abs(P2(1:end-1)+P2(2:end)-1)<=2*eps); logw2(ii)=-Inf; logw2(ii+1)=-Inf; end
-        logw1(1:NF-ceil(DD/fstep))=-Inf; logw1(NF+ceil(DD/fstep):end)=-Inf;
-        nnid=find(~isfinite(logw1)); dind=[0;find(diff(nnid(:))>1);length(nnid)];
-        for dn=1:length(dind)-1
-            cii=nnid(1+dind(dn)):nnid(dind(dn+1));
-            if cii(1)>2 && logw1(cii(1)-2)>logw1(cii(1)-1)
-                logw1(cii)=max(logw1(cii(1)-1)-(cii-cii(1)+1)*(logw1(cii(1)-2)-logw1(cii(1)-1)),logw1(cii));
-            end
-            if cii(end)<length(logw1)-2 && logw1(cii(end)+2)>logw1(cii(1)+1)
-                logw1(cii)=max(logw1(cii(end)+1)-(cii(end)-cii+1)*(logw1(cii(end)+2)-logw1(cii(end)+1)),logw1(cii));
-            end
-        end
-        nnid=find(~isfinite(logw2)); dind=unique([0;find(diff(nnid(:))>1);length(nnid)]);
-        for dn=1:length(dind)-1
-            cii=nnid(1+dind(dn)):nnid(dind(dn+1));
-            if cii(1)>2 && logw2(cii(1)-2)>logw2(cii(1)-1)
-                logw2(cii)=max(logw2(cii(1)-1)-(cii-cii(1)+1)*(logw2(cii(1)-2)-logw2(cii(1)-1)),logw2(cii));
-            end
-            if cii(end)<length(logw2)-2 && logw2(cii(end)+2)>logw2(cii(1)+1)
-                logw2(cii)=max(logw2(cii(end)+1)-(cii(end)-cii+1)*(logw2(cii(1)+2)-logw2(cii(1)+1)),logw2(cii));
-            end
-        end
-        logw1(~isfinite(logw1))=min(logw1)-10*(max(logw1)-min(logw1));
-        logw2(~isfinite(logw2))=min(logw2)-10*(max(logw2)-min(logw2));
-        if ~isempty(PenalFunc{1}), logw1=PenalFunc{1}(logw1/pars(1)); end
-        if ~isempty(PenalFunc{2}), logw2=PenalFunc{2}(logw2/pars(2)); end
-        %Calculate all
-        pind0=pind;
-        if strcmpi(PathOpt,'on'), idr=pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode);
-        else [idr,timax,fimax]=onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode); end
-        lid=sub2ind(size(Fp),idr(tn1:tn2),tn1:tn2);
-        tfsupp(1,tn1:tn2)=Fp(lid); pind(tn1:tn2)=round(Ip(lid)); pamp(tn1:tn2)=Qp(lid);
-        rdiff=length(find(pind(tn1:tn2)-pind0(tn1:tn2)~=0))/(tn2-tn1+1);
-        itn=itn+1;
-        %Update the distributions
-        P1=zeros(1,2*NF+1); P2=zeros(1,NF+2);
-        pf=tfsupp(1,:); gf=freq; if fres==2, pf=log(pf); gf=log(gf); end
-        ci=1+(diff(pf)-dfreq(1))/fstep; cm=ci-floor(ci); ci=floor(ci);
-        for tn=tn1:tn2-1, P1(ci(tn)+1)=P1(ci(tn)+1)+1-cm(tn); P1(ci(tn)+2)=P1(ci(tn)+2)+cm(tn); end
-        ci=1+(pf-gf(1))/fstep; cm=ci-floor(ci); ci=floor(ci);
-        for tn=tn1:tn2, P2(ci(tn)+1)=P2(ci(tn)+1)+1-cm(tn); P2(ci(tn)+2)=P2(ci(tn)+2)+cm(tn); end
-        P1=P1(2:end-1); P2=P2(2:end-1);
-        %Update the information structure, if needed
-        if nargout>1
-            ec.pfreq=[ec.pfreq;tfsupp(1,:)]; ec.pind=[ec.pind;pind]; ec.pamp=[ec.pamp;pamp]; ec.idr=[ec.idr;idr];
-            ec.P1=[ec.P1;P1]; ec.P2=[ec.P2;P2]; ec.rdiff=[ec.rdiff,rdiff];
-        end
-        %Display, if needed
-        if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
-            fprintf('%0.2f%%; ',100*rdiff);
-            if ~isempty(strfind(DispMode,'plot'))
-                line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'DisplayName',sprintf('Iteration %d (discrepancy %0.2f%%)',itn,100*rdiff));
-                line1=plot(ax(2),cdfreq,P1/max(P1),'DisplayName',sprintf('Iteration %d',itn));
-                line2=plot(ax(3),freq,P2/max(P2),'DisplayName',sprintf('Iteration %d',itn));
-                if ~strcmpi(PathOpt,'on'),
-                    mpt=plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ok','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','w',...
-                        'DisplayName',['Starting point (iteration ',num2str(itn),')']);
-                end
-            end
-        end
-        %Check for "cycling" and maximum iterations
-        allpind(itn+1,:)=pind; gg=Inf;
-        if rdiff~=0 && itn>2
-            for kn=2:itn-1, gg=min([gg,length(find(pind(tn1:tn2)-allpind(kn,tn1:tn2)~=0))]); end
-        end
-        if gg==0
-            if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
-                fprintf('converged to a cycle, terminating iteration.');
-            end
-            break;
-        end
-        if itn>MaxIter, break; end
-    end
-    
-    if ~strcmpi(DispMode,'off')
-        if ~strcmpi(DispMode,'notify'), fprintf('\n'); end
-        if itn>MaxIter
-            fprintf(2,sprintf('Warning: Not converged within MaxIter=%d iterations; the latest curve estimate is used.\n',MaxIter));
-        end
-        if ~isempty(strfind(DispMode,'plot'))
-            set([line0,line1,line2],'Color','k','LineWidth',2);
-            if ~strcmpi(PathOpt,'on'), set(mpt,'Color',b,'MarkerFaceColor','k'); end
-            if fres==2 %change plot if the resolution is logarithmic
-                set(ax(2:3),'XScale','log');
-                xlabel(ax(2),'1+\Delta\nu/\nu');
-                title(ax(2),'P_1(1+\Delta\nu/\nu) (normalized on max)');
-            end
+    if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify'), fprintf('\n'); end
+    if ~isempty(strfind(DispMode,'plot'))
+        set(line0,'Color','k','LineWidth',2);
+        if ~strcmpi(PathOpt,'on'), set(mpt,'Color',b,'MarkerFaceColor','k'); end
+        if fres==2 %change plot if the resolution is logarithmic
+            set(line1,'YData',exp(get(line1,'YData')),'DisplayName','exp(m[d\log\omega_p/dt])');
+            set(line2,'YData',exp(get(line2,'YData'))-1,'DisplayName','exp(s[d\log\omega_p/dt])-1');
+            set(line3,'YData',exp(get(line3,'YData')),'DisplayName','exp(m[\log\omega_p])/2\pi');
+            set(line4,'YData',exp(get(line4,'YData'))-1,'DisplayName','exp(s[\log\omega_p])-1');
+            set(ax(2:3),'YScale','log'); ylabel(ax(2),'Frequency Ratio'); ylabel(ax(3),'Frequency (Hz)');
+            title(ax(2),'$e^{{\rm m}[d\log\omega_p/dt]}$ (solid), $e^{{\rm s}[d\log\omega_p/dt]}-1$ (dashed)','interpreter','Latex','FontSize',20);
+            title(ax(3),'$e^{{\rm m}[\log\omega_p]}/2\pi$ (solid), $e^{{\rm s}[\log\omega_p]}-1$ (dashed)','interpreter','Latex','FontSize',20);
+            iline=[get(line1,'YData'),get(line2,'YData')]; set(ax(2),'YLim',[0.75*min(iline),1.5*max(iline)]);
+            iline=[get(line3,'YData'),get(line4,'YData')]; set(ax(3),'YLim',[0.75*min(iline),1.5*max(iline)]);
         end
     end
     
