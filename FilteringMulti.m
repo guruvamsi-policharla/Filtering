@@ -407,6 +407,7 @@ function wavlet_transform_Callback(hObject, eventdata, handles)
     handles.pow_WT = cell(n,1);
     handles.pow_arr = cell(n,1);
     handles.amp_arr = cell(n,1);
+    
     %Calculating wavelet transform
     for p = 1:n
         status_Callback(hObject, eventdata, handles, sprintf('Calculating Wavelet Tranform of Signal %d/%d',p,n));
@@ -460,51 +461,39 @@ function filter_signal_Callback(hObject, eventdata, handles)
 %Extracts the filtered component of the signal
     fs = str2double(get(handles.sampling_freq,'String'));
     list = get(handles.interval_list,'String');    
-    
+    fc =  str2double(get(handles.central_freq,'String'));
     extraction_type = get(handles.extraction_type_popup,'Value');
+    
+    items = get(handles.wavelet_type,'String');
+    index_selected = get(handles.wavelet_type,'Value');
+    wavelet_type_selected = items{index_selected};
+    
+    items = get(handles.preprocess,'String');
+    index_selected = get(handles.preprocess,'Value');
+    preprocess_selected = items{index_selected};
+    
+    items = get(handles.cutedges,'String');
+    index_selected = get(handles.cutedges,'Value');
+    cutedges_selected = items{index_selected};
     
     for i = 1:size(handles.sig,1)
         for j =1:size(list,1)
             fl = csv_to_mvar(list{j,1});
             if extraction_type == 2
                 [handles.bands{i,j},~] = loop_butter(handles.sig_cut(i,:),fl,fs);%bandpass_butter(handles.sig_cut(i,:),2,fl(1),fl(2),fs);     
-            elseif extraction_type == 1
-%                 if(isnan(fmax)&& isnan(fmin))
-%                     if(isnan(fc))
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);            
-%                     else
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);  
-%                     end
-%                 elseif(isnan(fmax))
-%                     if(isnan(fc))
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
-%                     else
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
-%                     end
-%                 elseif(isnan(fmin))
-%                     if(isnan(fc))
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
-%                     else
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
-%                     end
-%                 else
-%                     if(isnan(fc))
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
-%                     else
-%                                 [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
-%                                 'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
-%                     end
-%                 end
-%                 tfsupp = ecurve(WT,handles.freqarr,wopt);
-%                 [handles.bands{i,j},~] = rectfr(tfsupp,wt,freqarr,wopt);
+            elseif extraction_type == 1         
                 
+                if(isnan(fc))
+                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges',cutedges_selected,...
+                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
+                else
+                            [WT,freqarr,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fl(1),'fmax',fl(2),'CutEdges',cutedges_selected,...
+                            'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
+                end
+                
+                tfsupp = ecurve(WT,freqarr,wopt);
+                [handles.bands_iamp{i,j},handles.bands_iphi{i,j},handles.bands_freq{i,j}] = rectfr(tfsupp,WT,freqarr,wopt);            
+                handles.bands_iphi{i,j} = mod(handles.bands_iphi{i,j},2*pi) - pi;
             end
         end
     end
@@ -538,12 +527,7 @@ elseif  display_selected == 2
     set(handles.fourier_scale,'visible','off');
     list = get(handles.interval_list,'String');
     set(handles.interval_list,'max',size(list,1));
-%     interval_selected = get(handles.interval_list,'Value');
-%     if size(interval_selected,2)>1
-%         set(handles.interval_list,'max',1,'value',1);
-%     else
-%         set(handles.interval_list,'max',1);
-%     end   
+ 
     uistack(handles.amp_axis,'top');
     uistack(handles.phase_axis,'top');
     interval_list_Callback(hObject, eventdata, handles)
@@ -745,25 +729,47 @@ function interval_list_Callback(hObject, eventdata, handles)
         set(handles.amp_axis,'visible','on');
         set(handles.phase_axis,'visible','on');
         
-        if ~isfield(handles,'bands')
+        if ~isfield(handles,'bands') && ~isfield(handles,'bands_iamp')
             return;
         end
         hold(handles.amp_axis,'on');
         hold(handles.phase_axis,'on');
-        for i = 1:size(interval_selected,2)
-            ht = hilbert(handles.bands{signal_selected,interval_selected(i)});
-            ht = angle(ht);            
-            plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected(i)}(1,:));
-            plot(handles.phase_axis, handles.time_axis, ht(1,:));
-        end        
-        linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
-        xlim(handles.amp_axis,xl);
-        xlim(handles.phase_axis,xl);       
-        xlabel(handles.phase_axis,'Time (s)');
-        ylabel(handles.phase_axis,'Phase');
-        ylabel(handles.amp_axis,'Filtered Signal');
-        set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
-        set(handles.amp_axis,'fontunits','normalized');
+        
+        extraction_type = get(handles.extraction_type_popup,'Value');
+        
+        if extraction_type == 2
+            
+            for i = 1:size(interval_selected,2)
+                ht = hilbert(handles.bands{signal_selected,interval_selected(i)});
+                ht = angle(ht);            
+                plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected(i)});
+                plot(handles.phase_axis, handles.time_axis, ht);
+            end        
+            
+            linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
+            xlim(handles.amp_axis,xl);
+            xlim(handles.phase_axis,xl);       
+            xlabel(handles.phase_axis,'Time (s)');
+            ylabel(handles.phase_axis,'Phase');
+            ylabel(handles.amp_axis,'Filtered Signal');
+            set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
+            set(handles.amp_axis,'fontunits','normalized');
+        
+        elseif extraction_type == 1
+            for i = 1:size(interval_selected,2)
+                amplitude = handles.bands_iamp{signal_selected,interval_selected(i)}.*cos(handles.bands_iphi{signal_selected,interval_selected(i)});
+                plot(handles.amp_axis, handles.time_axis, amplitude);
+                plot(handles.phase_axis, handles.time_axis,handles.bands_iphi{signal_selected,interval_selected(i)});
+            end
+            linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
+            xlim(handles.amp_axis,xl);
+            xlim(handles.phase_axis,xl);       
+            xlabel(handles.phase_axis,'Time (s)');
+            ylabel(handles.phase_axis,'Phase');
+            ylabel(handles.amp_axis,'Filtered Signal');
+            set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
+            set(handles.amp_axis,'fontunits','normalized');
+        end
     elseif display_selected == 3
         display_type_Callback(hObject, eventdata, handles);
     end

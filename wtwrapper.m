@@ -1,0 +1,33 @@
+if(isnan(fmax)&& isnan(fmin))
+    if(isnan(fc))
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);            
+    else
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);  
+    end
+elseif(isnan(fmax))
+    if(isnan(fc))
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
+    else
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+    end
+elseif(isnan(fmin))
+    if(isnan(fc))
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected); 
+    else
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmax',fmax,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc); 
+    end
+else
+    if(isnan(fc))
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected);
+    else
+                [WT,~,wopt]=wt(handles.sig_cut(i,:),fs,'fmin',fmin,'fmax',fmax,'CutEdges',cutedges_selected,...
+                'Preprocess',preprocess_selected,'Wavelet',wavelet_type_selected,'f0',fc);                
+    end
+end
