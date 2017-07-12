@@ -21,7 +21,6 @@ s_out=bandpass_butter(s_in,or,band(1),band(2), fs);
 end
 or=or-1;
 s_out=bandpass_butter(s_in,or,band(1),band(2), fs);
-;
 
 
 function [d]=bandpass_butter(c,n,flp,fhi,fs) 

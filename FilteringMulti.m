@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 06-Jul-2017 20:49:08
+% Last Modified by GUIDE v2.5 12-Jul-2017 19:53:21
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -68,6 +68,7 @@ end
 function FilteringMulti_OpeningFcn(hObject, eventdata, handles, varargin)
 %screensize = get( groot, 'Screensize' );
 handles.calc_type = 1;
+handles.plot_type = 2;
 movegui('center') 
 axes(handles.logo)
 matlabImage = imread('physicslogo.png');
@@ -338,7 +339,7 @@ function signal_list_Callback(hObject, eventdata, handles)
             display_type_Callback(hObject, eventdata, handles);
         end
     end
-    
+    tic
     if any(signal_selected ~= size(handles.sig,1)+1) && length(signal_selected) == 1
         plot(handles.time_series, handles.time_axis, handles.sig(signal_selected,:));%Plotting the time_series part after calculation of appropriate limits
         xl = csv_to_mvar(get(handles.xlim, 'String'));
@@ -349,7 +350,6 @@ function signal_list_Callback(hObject, eventdata, handles)
         detrend_signal_Callback(hObject, eventdata, handles);%plots the detrended curve
         xlabel(handles.time_series, 'Time (s)');
         set(handles.status, 'String', 'Select Data And Continue With Wavelet Transform');
-
         if isfield(handles,'amp_WT')
             display_type_Callback(hObject, eventdata, handles);
         end
@@ -359,7 +359,6 @@ function signal_list_Callback(hObject, eventdata, handles)
         display_type_Callback(hObject, eventdata, handles);
         intervals_Callback(hObject, eventdata, handles)
     end
-    
     
 function wavlet_transform_Callback(hObject, eventdata, handles)
 %Does the wavelet transform 
@@ -399,7 +398,7 @@ function wavlet_transform_Callback(hObject, eventdata, handles)
     time_axis = xl(1):1/fs:xl(2);
     if length(time_axis)>=2000
         screensize = max(get(groot,'Screensize'));
-        under_sample = floor(size(handles.sig,2)/screensize);%TODO improve reliability with screens
+        under_sample = floor(size(handles.sig,2)/screensize*5);%TODO improve reliability with screens
     else 
         under_sample = 1;
     end
@@ -514,10 +513,7 @@ if display_selected == 1
     end   
     uistack(handles.plot3d,'top');
     uistack(handles.plot_pow,'top');
-    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');
-%     handles.plot3d = axes('parent',handles.wt_pane,'position',[.07 .122 .629 .849]);
-%     handles.plot_pow = axes('parent',handles.wt_pane,'position',[.781 .122 .196 .849]);
-%     handles.cum_avg = axes('parent',handles.wt_pane,'position',[.053 .116 .934 .84]);    
+    linkaxes([handles.amp_axis handles.phase_axis handles.freq_axis handles.time_series],'off');
     wavtr_Callback(hObject, eventdata, handles)
     
 elseif  display_selected == 2
@@ -527,6 +523,7 @@ elseif  display_selected == 2
  
     uistack(handles.amp_axis,'top');
     uistack(handles.phase_axis,'top');
+    uistack(handles.freq_axis,'top');
     interval_list_Callback(hObject, eventdata, handles)
         
 elseif  display_selected == 3
@@ -534,7 +531,7 @@ elseif  display_selected == 3
     uistack(handles.fourier_plot,'top');
     list = get(handles.interval_list,'String');
     set(handles.interval_list,'max',size(list,1));
-    linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'off');        
+    linkaxes([handles.amp_axis handles.phase_axis handles.freq_axis handles.time_series],'off');        
     child_handles = allchild(handles.wt_pane);
     fs = str2double(get(handles.sampling_freq,'String'));
     
@@ -612,6 +609,7 @@ end
 
 function wavtr_Callback(hObject, eventdata, handles)
 %Plots all figures
+tic
     signal_selected = get(handles.signal_list,'Value');  
     if any(signal_selected == size(handles.sig,1)+1) && isfield(handles,'freqarr')     
         uistack(handles.cum_avg,'top');
@@ -709,7 +707,7 @@ function wavtr_Callback(hObject, eventdata, handles)
     grid(handles.plot_pow,'on');
     grid(handles.plot3d,'on');
     guidata(hObject,handles);
-
+toc
 function fourier_scale_Callback(hObject, eventdata, handles)
     contents = get(handles.fourier_scale,'String');
     scale = contents{get(hObject,'Value')};
@@ -721,14 +719,14 @@ function interval_list_Callback(hObject, eventdata, handles)
     interval_selected = get(handles.interval_list,'Value');
     display_selected = get(handles.display_type,'Value');
     signal_selected = get(handles.signal_list,'Value');
-    list = get(handles.interval_list,'String');    
+    list = get(handles.interval_list,'String');
     
     if isempty(list)
         return;
     end
     
-    if display_selected ==1
-        fl = csv_to_mvar(cell2mat(list(interval_selected)));  
+    if display_selected == 1 
+        fl = csv_to_mvar(list{interval_selected,1});   
         clear_axes_lines(handles.plot3d);
         child_handles = allchild(handles.plot_pow);
         for i = 1:size(child_handles,1)   
@@ -779,12 +777,13 @@ function interval_list_Callback(hObject, eventdata, handles)
         end
         set(handles.amp_axis,'visible','on');
         set(handles.phase_axis,'visible','on');
-        
+        set(handles.freq_axis,'visible','on');
         if ~isfield(handles,'bands') && ~isfield(handles,'bands_iphi')
             return;
         end
         hold(handles.amp_axis,'on');
         hold(handles.phase_axis,'on');
+        hold(handles.freq_axis,'on');
         
         extraction_type = get(handles.extraction_type_popup,'Value');
         
@@ -792,17 +791,20 @@ function interval_list_Callback(hObject, eventdata, handles)
             
             for i = 1:size(interval_selected,2)
                 ht = hilbert(handles.bands{signal_selected,interval_selected(i)});
-                ht = angle(ht);            
+                amp = abs(ht);
+                ang = angle(ht);            
                 plot(handles.amp_axis, handles.time_axis, handles.bands{signal_selected,interval_selected(i)});
-                plot(handles.phase_axis, handles.time_axis, ht);
+                plot(handles.phase_axis, handles.time_axis, ang);
+                plot(handles.freq_axis,handles.time_axis,amp);
             end        
             
-            linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
+            linkaxes([handles.amp_axis handles.phase_axis handles.freq_axis handles.time_series],'x');
             xlim(handles.amp_axis,xl);
             xlim(handles.phase_axis,xl);       
             xlabel(handles.phase_axis,'Time (s)');
             ylabel(handles.phase_axis,'Phase');
             ylabel(handles.amp_axis,'Filtered Signal');
+            ylabel(handles.freq_axis,'Amplitude');
             set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
             set(handles.amp_axis,'fontunits','normalized');
         
@@ -811,13 +813,30 @@ function interval_list_Callback(hObject, eventdata, handles)
                 %amplitude = handles.bands_iamp{signal_selected,interval_selected(i)}.*cos(handles.bands_iphi{signal_selected,interval_selected(i)});
                 plot(handles.amp_axis, handles.time_axis, handles.recon{signal_selected,interval_selected(i)});
                 plot(handles.phase_axis, handles.time_axis,handles.bands_iphi{signal_selected,interval_selected(i)});
+                if(handles.plot_type == 1)      
+                    WTpow = handles.pow_WT{signal_selected,1};
+                    handles.peak_value = max(WTpow(:))+.1;
+                    pcolor(handles.freq_axis, handles.time_axis_us , handles.freqarr, WTpow(1:end,1:end));                     
+                else 
+                    WTamp = handles.amp_WT{signal_selected,1};
+                    handles.peak_value = max(WTamp(:))+.1;
+                    pcolor(handles.freq_axis, handles.time_axis_us , handles.freqarr, WTamp(1:end,1:end));         
+                end
+                ylim(handles.freq_axis,csv_to_mvar(list{interval_selected,1}));
+                set(handles.freq_axis,'yscale','log');
+                shading(handles.freq_axis,'interp');
+%                 f =handles.freq_axis;
+%                 t = handles.time_axis;
+%                 ff = handles.bands_freq{signal_selected,interval_selected(i)};
+                plot(handles.freq_axis, handles.time_axis,handles.bands_freq{signal_selected,interval_selected(i)});
             end
-            linkaxes([handles.amp_axis handles.phase_axis handles.time_series],'x');
+            linkaxes([handles.amp_axis handles.phase_axis handles.freq_axis handles.time_series],'x');
             xlim(handles.amp_axis,xl);
             xlim(handles.phase_axis,xl);       
             xlabel(handles.phase_axis,'Time (s)');
             ylabel(handles.phase_axis,'Phase');
             ylabel(handles.amp_axis,'Filtered Signal');
+            ylabel(handles.freq_axis,'Extracted Ridge');
             set(handles.phase_axis,'yticklabel',{'-\pi','-0.5\pi','0', '0.5\pi', '\pi'},'ytick',[-pi, -0.5*pi, 0, 0.5*pi, pi],'fontunits','normalized');
             set(handles.amp_axis,'fontunits','normalized');
         end
@@ -951,7 +970,11 @@ switch eventdata.Key
         end
         list = get(handles.interval_list,'String');
         list(interval_selected,:) = [];
-        set(handles.interval_list,'String',list);        
+        set(handles.interval_list,'String',list);     
+%         handles.bands(:,interval_selected) = [];
+%         guidata(hObject,handles);
+%         interval_list_Callback(hObject, eventdata, handles)
+%         guidata(hObject,handles);
         drawnow;
 end   
 %--------------------------------------------------------------------------
@@ -1112,12 +1135,11 @@ function plot_type_SelectionChangeFcn(hObject, eventdata, handles)
 %deciding which plot
     switch get(eventdata.NewValue,'Tag') % Get Tag of selected object.
         case 'power'
-            plot_type = 1;
+            handles.plot_type = 1;
         case 'amp'
-            plot_type = 2;
+            handles.plot_type = 2;
     end
     
-    handles.plot_type = plot_type;
     guidata(hObject,handles); 
     wavtr_Callback(hObject, eventdata, handles)
     guidata(hObject,handles); 
@@ -1139,6 +1161,9 @@ function calc_type_SelectionChangedFcn(hObject, eventdata, handles)
    
 % ----------------------------------------Saving Files---------------
 function save_Callback(hObject, eventdata, handles)
+function save_fig_Callback(hObject, eventdata, handles)
+function save_csv_Callback(hObject, eventdata, handles)
+function save_mat_Callback(hObject, eventdata, handles)
 %Honestly you're just here because I don't know how to get rid of you
 
 function save_3dplot_Callback(hObject, eventdata, handles)
@@ -1162,92 +1187,24 @@ ax = copyobj(handles.cum_avg, Fig);
 set(ax,'Units', 'normalized', 'Position', [0.1,0.2,.85,.7]);
 set(Fig,'Units','normalized','Position', [0.2 0.2 0.5 0.5]);
 
-function save_pow_arr_csv_Callback(hObject, eventdata, handles)
-%Saves the avg power array in .csv format
-[FileName,PathName] = uiputfile('.csv');
-save_location = strcat(PathName,FileName);
-pow_arr = cell2mat(handles.pow_arr);
-csvwrite(save_location,pow_arr);
+function save_filtered_sig_plot_Callback(hObject, eventdata, handles)
+Fig = figure;
+ax = copyobj(handles.amp_axis, Fig);
+set(ax,'Units', 'normalized', 'Position', [0.1,0.2,.85,.7]);
+set(Fig,'Units','normalized','Position', [0.2 0.2 0.5 0.5]);
+function save_ridge_plot_Callback(hObject, eventdata, handles)
+Fig = figure;
+ax = copyobj(handles.freq_axis, Fig);
+set(ax,'Units', 'normalized', 'Position', [0.1,0.2,.85,.7]);
+set(Fig,'Units','normalized','Position', [0.2 0.2 0.5 0.5]);
+function save_phase_plot_Callback(hObject, eventdata, handles)
+Fig = figure;
+ax = copyobj(handles.phase_axis, Fig);
+set(ax,'Units', 'normalized', 'Position', [0.1,0.2,.85,.7]);
+set(Fig,'Units','normalized','Position', [0.2 0.2 0.5 0.5]);
 
-function save_amp_arr_csv_Callback(hObject, eventdata, handles)
-[FileName,PathName] = uiputfile('.csv');
-save_location = strcat(PathName,FileName);
-amp_arr = cell2mat(handles.amp_arr);
-csvwrite(save_location,amp_arr);
-
-function save_freqarr_csv_Callback(hObject, eventdata, handles)
-[FileName,PathName] = uiputfile('.csv');
-save_location = strcat(PathName,FileName);
-csvwrite(save_location,handles.freqarr');
-
-function save_sig_pp_csv_Callback(hObject, eventdata, handles)
-%Saves the preprocessed signal in .csv format
-[FileName,PathName] = uiputfile('.csv');
-save_location = strcat(PathName,FileName)
-sig_pp = cell2mat(handles.sig_pp);
-fs = str2double(get(handles.sampling_freq,'String'));
-xl = get(handles.xlim,'String');
-xl = csv_to_mvar(xl);
-xl = xl.*fs;
-xl(2) = min(xl(2),size(handles.sig,2));
-xl(1) = max(xl(1),1);
-sig_pp = sig_pp(:,xl(1):xl(2));
-csvwrite(save_location,sig_pp);
-
-function save_pow_arr_mat_Callback(hObject, eventdata, handles)
-%Saves the avg power array in .mat format
-[FileName,PathName] = uiputfile('.mat','Save Power Array as');
-save_location = strcat(PathName,FileName)
-powStruct.pow_arr = handles.pow_arr;
-powStruct.freqarr = handles.freqarr';
-save(save_location,'powStruct');
-
-function save_amp_arr_mat_Callback(hObject, eventdata, handles)
+function save_filt_sig_mat_Callback(hObject, eventdata, handles)
 [FileName,PathName] = uiputfile('.mat','Save Amplitude Array as');
 save_location = strcat(PathName,FileName)
-ampStruct.amp_arr = handles.amp_arr;
-ampStruct.freqarr = handles.freqarr';
-save(save_location,'ampStruct');
-
-function save_sig_pp_mat_Callback(hObject, eventdata, handles)
-%Saves the preprocessed signal in .mat format
-[FileName,PathName] = uiputfile('.mat','Save Preprocessed Signal as');
-save_location = strcat(PathName,FileName)
-sig_pp = handles.sig_pp;
-fs = str2double(get(handles.sampling_freq,'String'));
-xl = get(handles.xlim,'String');
-xl = csv_to_mvar(xl);
-xl = xl.*fs;
-xl(2) = min(xl(2),size(handles.sig,1));
-xl(1) = max(xl(1),1);
-sig_pp = sig_pp(xl(1):xl(2),1);
-save(save_location,'sig_pp');
- 
-function save_cut_ts_csv_Callback(hObject, eventdata, handles)
-[FileName,PathName] = uiputfile('.csv');
-save_location = strcat(PathName,FileName);
-sig = handles.sig;
-fs = str2double(get(handles.sampling_freq,'String'));
-xl = get(handles.xlim,'String');
-xl = csv_to_mvar(xl);
-xl = xl.*fs;
-xl(2) = floor(min(xl(2),size(handles.sig,2)));
-xl(1) = floor(max(xl(1),1));
-sig = sig(:,xl(1):xl(2));
-csvwrite(save_location,sig);
-
-function save_cut_ts_mat_Callback(hObject, eventdata, handles)
-[FileName,PathName] = uiputfile('.mat','Save Cut Signal as');
-save_location = strcat(PathName,FileName)
-sig = handles.sig;
-fs = str2double(get(handles.sampling_freq,'String'));
-xl = get(handles.xlim,'String');
-xl = csv_to_mvar(xl);
-xl = xl.*fs;
-xl(2) = min(xl(2),size(handles.sig,2));
-xl(1) = max(xl(1),1);
-sig = sig(:,xl(1):xl(2));
-save(save_location,'sig');
-
-
-
+recon = handles.recon;
+save(save_location,'recon');
