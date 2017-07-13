@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 13-Jul-2017 09:57:46
+% Last Modified by GUIDE v2.5 13-Jul-2017 11:11:45
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -1214,3 +1214,9 @@ function save_phase_mat_Callback(hObject, eventdata, handles)
 save_location = strcat(PathName,FileName)
 phi = handles.bands_iphi;
 save(save_location,'phi');
+
+function save_ifreq_mat_Callback(hObject, eventdata, handles)
+[FileName,PathName] = uiputfile('.mat','Save as');
+save_location = strcat(PathName,FileName)
+freq = handles.bands_freq;
+save(save_location,'freq');
