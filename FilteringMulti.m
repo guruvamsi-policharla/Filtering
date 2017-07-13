@@ -39,7 +39,7 @@ function varargout = FilteringMulti(varargin)
 
 % Edit the above text to modify the response to help FilteringMulti
 
-% Last Modified by GUIDE v2.5 12-Jul-2017 19:53:21
+% Last Modified by GUIDE v2.5 13-Jul-2017 09:57:46
 %*************************************************************************%
 %                BEGIN initialization code - DO NOT EDIT                  %
 %                ----------------------------------------                 %
@@ -642,13 +642,13 @@ tic
                 ylabel(handles.cum_avg,'Average Power');
                 xlabel(handles.cum_avg,'Frequency (Hz)');
                 [M,I] = max(handles.pow_arr{signal_selected(i),1});
-                text(handles.cum_avg,handles.freqarr(I),M,num2str(signal_selected(i)));
+%                 text(handles.cum_avg,handles.freqarr(I),M,num2str(signal_selected(i)));
             elseif signal_selected(i) <= size(handles.sig,1)
                 plot(handles.cum_avg, handles.freqarr, handles.amp_arr{signal_selected(i),1});                
                 ylabel(handles.cum_avg,'Average Amplitude');
                 xlabel(handles.cum_avg,'Frequency (Hz)');
                 [M,I] = max(handles.amp_arr{signal_selected(i),1});
-                text(handles.cum_avg,handles.freqarr(I),M,num2str(signal_selected(i)));
+%                 text(handles.cum_avg,handles.freqarr(I),M,num2str(signal_selected(i)));
             end
             
         end        
@@ -1204,7 +1204,13 @@ set(ax,'Units', 'normalized', 'Position', [0.1,0.2,.85,.7]);
 set(Fig,'Units','normalized','Position', [0.2 0.2 0.5 0.5]);
 
 function save_filt_sig_mat_Callback(hObject, eventdata, handles)
-[FileName,PathName] = uiputfile('.mat','Save Amplitude Array as');
+[FileName,PathName] = uiputfile('.mat','Save as');
 save_location = strcat(PathName,FileName)
 recon = handles.recon;
 save(save_location,'recon');
+
+function save_phase_mat_Callback(hObject, eventdata, handles)
+[FileName,PathName] = uiputfile('.mat','Save as');
+save_location = strcat(PathName,FileName)
+phi = handles.bands_iphi;
+save(save_location,'phi');
